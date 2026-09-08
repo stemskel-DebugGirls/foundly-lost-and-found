@@ -34,14 +34,55 @@ const supabase = createClient(
 
 /* =========================================================
    CORS
-   Allow Vite localhost on ANY port
+   Allow local development + Render frontend
 ========================================================= */
+
+const allowedOrigins = [
+  "https://foundly-sk-limbang.onrender.com",
+];
 
 app.use(
   cors({
-    origin: /^http:\/\/localhost:\d+$/,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      const isLocalhost =
+        /^http:\/\/localhost:\d+$/.test(origin);
+
+      const isLan =
+        /^http:\/\/192\.168\.\d+\.\d+:\d+$/.test(origin);
+
+      const isRender =
+        allowedOrigins.includes(origin);
+
+      if (
+        isLocalhost ||
+        isLan ||
+        isRender
+      ) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error("Not allowed by CORS")
+      );
+    },
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+    ],
   })
 );
 
