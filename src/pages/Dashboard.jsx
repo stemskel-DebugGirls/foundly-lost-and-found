@@ -1772,10 +1772,71 @@ useEffect(() => {
                         <button
                           type="button"
                           key={notification.id}
-                          onClick={() => {
-                            markStudentNotificationRead(notification.id);
+                          onClick={async () => {
+                            await markStudentNotificationRead(notification.id);
                             setShowNotifications(false);
-                            setActiveMenu(notification.menu);
+
+                            const menu = String(notification.menu || "")
+                              .toLowerCase()
+                              .replace(/[\s_-]/g, "");
+
+                            const title = String(notification.title || "")
+                              .toLowerCase();
+
+                            const type = String(notification.type || "")
+                              .toLowerCase();
+
+                            if (
+                              menu === "messages" ||
+                              menu === "message" ||
+                              type === "message" ||
+                              title.includes("message")
+                            ) {
+                              if (onMessages) {
+                                window.scrollTo({
+                                  top: 0,
+                                  behavior: "smooth",
+                                });
+
+                                onMessages();
+                              }
+
+                              return;
+                            }
+
+                            if (
+                              menu === "myreports" ||
+                              menu === "reports" ||
+                              menu === "report" ||
+                              type === "report" ||
+                              type === "resolved" ||
+                              title.includes("report") ||
+                              title.includes("resolved")
+                            ) {
+                              if (onMyReports) {
+                                window.scrollTo({
+                                  top: 0,
+                                  behavior: "smooth",
+                                });
+
+                                onMyReports();
+                              }
+
+                              return;
+                            }
+
+                            if (menu === "profile") {
+                              if (onProfile) {
+                                window.scrollTo({
+                                  top: 0,
+                                  behavior: "smooth",
+                                });
+
+                                onProfile();
+                              }
+
+                              return;
+                            }
                           }}
                           style={{
                             width: "100%",
