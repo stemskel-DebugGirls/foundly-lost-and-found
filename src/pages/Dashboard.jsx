@@ -205,6 +205,19 @@ function Dashboard({
   const [notificationLoading, setNotificationLoading] =
     useState(false);
 
+  /* =====================================================
+     SETTINGS - NOTIFICATION TOGGLE
+  ===================================================== */
+
+  const [notificationsEnabled, setNotificationsEnabled] =
+    useState(() => {
+      return (
+        localStorage.getItem(
+          "foundlyNotificationsEnabled"
+        ) !== "false"
+      );
+    });
+
 
   /* =====================================================
      SIDEBAR
@@ -2205,9 +2218,9 @@ useEffect(() => {
           </div>
         )}
 
-        /* =================================================
-   SETTINGS
-================================================= */
+        {/* =================================================
+            SETTINGS
+        ================================================= */}
 
 {activeMenu === "settings" && (
   <section className="student-settings-section">
@@ -2282,14 +2295,6 @@ useEffect(() => {
               String(next)
             );
 
-            setNotificationCount(
-              next
-                ? studentNotifications.filter(
-                    (item) =>
-                      !item.read
-                  ).length
-                : 0
-            );
 
           }}
         >
@@ -2429,6 +2434,8 @@ useEffect(() => {
   </section>
 )}
 
+        {activeMenu === "dashboard" && (
+          <>
         {/* =================================================
             WELCOME
         ================================================= */}
@@ -3865,6 +3872,9 @@ useEffect(() => {
 
         </section>
 
+
+          </>
+        )}
 
         {/* =================================================
             FOOTER
