@@ -339,6 +339,23 @@ function AdminDashboard({
 
 
   /* =====================================================
+     SCHOOL USERS
+
+     The admin account stays in Supabase for authentication,
+     but must not be counted or displayed as a school user.
+  ===================================================== */
+
+  const schoolUsers =
+    users.filter((user) => {
+      const email =
+        user.email
+          ?.trim()
+          .toLowerCase();
+
+      return email !== "admin@foundly.edu.my";
+    });
+
+  /* =====================================================
      REPORT STATISTICS
   ===================================================== */
 
@@ -377,7 +394,7 @@ function AdminDashboard({
   ===================================================== */
 
   const totalPoints =
-    users.reduce(
+    schoolUsers.reduce(
       (total, user) => {
 
         const email =
@@ -536,7 +553,7 @@ function AdminDashboard({
   ===================================================== */
 
   const filteredUsers =
-    users.filter((user) => {
+    schoolUsers.filter((user) => {
 
       const keyword =
         searchUsers
@@ -988,7 +1005,7 @@ function AdminDashboard({
       );
 
 
-      users.forEach(
+      schoolUsers.forEach(
         (user) => {
 
           activity.push({
@@ -1036,7 +1053,7 @@ function AdminDashboard({
       reports,
       feedback,
       messages,
-      users,
+      schoolUsers,
     ]);
 
 
@@ -1445,7 +1462,7 @@ function AdminDashboard({
       ),
 
 
-    ...users.map(
+    ...schoolUsers.map(
       (user) => ({
 
         id:
@@ -1840,7 +1857,7 @@ function AdminDashboard({
               size={19}
             />,
             "Users",
-            users.length
+            schoolUsers.length
           )}
 
 
@@ -2361,7 +2378,7 @@ function AdminDashboard({
                 </span>
 
                 <strong>
-                  {users.length}
+                  {schoolUsers.length}
                 </strong>
 
                 <small>
