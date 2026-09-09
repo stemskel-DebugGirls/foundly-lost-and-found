@@ -95,7 +95,7 @@ app.use(
 
 app.use(
   express.json({
-    limit: "10mb",
+    limit: "2mb",
   })
 );
 
@@ -127,6 +127,39 @@ const USER_PUBLIC_COLUMNS =
 
 const USER_PROFILE_COLUMNS =
   "id, name, email, points, profile_image, created_at";
+
+const MAX_IMAGE_BYTES =
+  500 * 1024;
+
+function getDataUrlByteSize(value) {
+  if (typeof value !== "string") {
+    return 0;
+  }
+
+  const match = value.match(
+    /^data:[^;]+;base64,(.+)$/s
+  );
+
+  if (!match) {
+    return 0;
+  }
+
+  const base64 = match[1] || "";
+
+  const padding =
+    base64.endsWith("==")
+      ? 2
+      : base64.endsWith("=")
+      ? 1
+      : 0;
+
+  return Math.max(
+    0,
+    Math.floor(
+      (base64.length * 3) / 4
+    ) - padding
+  );
+}
 
 /* =========================================================
    HELPERS
@@ -1204,8 +1237,7 @@ app.patch(
   "/api/users/:id/profile",
   async (req, res) => {
     try {
-      const { id } =
-        req.params;
+      const { id } = req.params;
 
       const {
         name,
@@ -1213,9 +1245,7 @@ app.patch(
       } = req.body;
 
       const cleanName =
-        String(
-          name || ""
-        ).trim();
+        String(name || "").trim();
 
       if (!id) {
         return res.status(400).json({
@@ -1244,15 +1274,34 @@ app.patch(
         });
       }
 
-      if (
-        profileImage.length >
-        7 * 1024 * 1024
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Profile image is too large.",
-        });
+      if (profileImage) {
+        const profileImageBytes =
+          getDataUrlByteSize(
+            profileImage
+          );
+
+        if (
+          profileImageBytes >
+          MAX_IMAGE_BYTES
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Profile image must be 500 KB or smaller.",
+          });
+        }
+
+        if (
+          !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(
+            profileImage
+          )
+        ) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Only JPG, PNG or WebP profile images are allowed.",
+          });
+        }
       }
 
       const {
@@ -1274,11 +1323,16 @@ app.patch(
             id
           )
           .select(
-            USER_PROFILE_COLUMNS
+            USER_PUBLIC_COLUMNS
           )
           .single();
 
       if (error) {
+        console.error(
+          "❌ Update profile error:",
+          error
+        );
+
         return res.status(500).json({
           success: false,
           message:
@@ -1288,19 +1342,37 @@ app.patch(
         });
       }
 
+      const freshImageUrl =
+        updatedUser?.id
+          ? `${PUBLIC_API_BASE_URL}/api/users/${updatedUser.id}/image?v=${Date.now()}`
+          : "";
+
       return res.json({
         success: true,
+
         message:
           "Profile saved successfully! 💗",
 
-        user:
-          mapUser(
+        user: {
+          ...mapUser(
             updatedUser,
-            true
+            false
           ),
+
+          profileImage:
+            freshImageUrl,
+
+          profile_image:
+            freshImageUrl,
+        },
       });
 
     } catch (error) {
+      console.error(
+        "❌ Update profile server error:",
+        error
+      );
+
       return res.status(500).json({
         success: false,
         message:
@@ -1570,6 +1642,49 @@ async function createReport(
         message:
           "Contact number is required.",
       });
+    }
+
+    /* ---------------------------------------------------------
+       REPORT IMAGE SAFETY
+       Maximum actual image size = 500 KB
+    --------------------------------------------------------- */
+
+    if (image) {
+      if (typeof image !== "string") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Report image must be a valid string.",
+        });
+      }
+
+      const imageBytes =
+        getDataUrlByteSize(
+          image
+        );
+
+      if (
+        imageBytes >
+        MAX_IMAGE_BYTES
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Report image must be 500 KB or smaller.",
+        });
+      }
+
+      if (
+        !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(
+          image
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Only JPG, PNG or WebP report images are allowed.",
+        });
+      }
     }
 
     let user =
