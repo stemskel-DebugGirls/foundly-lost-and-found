@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import "./Profile.css";
+import API_URL from "../api";
 
 function Profile({
   currentUser,
@@ -80,7 +81,7 @@ function Profile({
     const loadProfileData = async () => {
       try {
         const response = await fetch(
-          "http://localhost:5000/api/users"
+          `${API_URL}/api/users`
         );
 
         const data = await response.json();
@@ -157,7 +158,7 @@ function Profile({
 
       try {
         const response = await fetch(
-          "http://localhost:5000/api/reports"
+          `${API_URL}/api/reports`
         );
 
         const data = await response.json();
@@ -614,7 +615,7 @@ function Profile({
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/users/${currentUser.id}/profile`,
+        `${API_URL}/api/users/${currentUser.id}/profile`,
         {
           method: "PATCH",
           headers: {
