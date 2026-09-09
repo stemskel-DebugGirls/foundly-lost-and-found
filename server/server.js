@@ -131,7 +131,6 @@ const USER_PROFILE_COLUMNS =
 const MAX_IMAGE_BYTES =
   500 * 1024;
 
-
 /* =========================================================
    SERVER-SIDE PROFILE IMAGE CACHE
    Keeps the latest image in backend memory so normal image
@@ -234,9 +233,15 @@ function mapUser(
 ) {
   if (!user) return null;
 
+  /*
+    IMPORTANT:
+    Every time users are loaded, generate a new version
+    for profile image URLs so the browser cannot reuse
+    an old profile picture.
+  */
   const imageUrl =
     user.id && hasImage
-      ? `${PUBLIC_API_BASE_URL}/api/users/${user.id}/image`
+      ? `${PUBLIC_API_BASE_URL}/api/users/${user.id}/image?v=${Date.now()}`
       : "";
 
   return {
@@ -417,10 +422,8 @@ app.get(
   (req, res) => {
     res.json({
       success: true,
-
       status:
         "OK",
-
       service:
         "Foundly Backend",
     });
@@ -1297,7 +1300,7 @@ app.get(
               {
                 ascending:
                   false,
-              },
+              }
             ),
 
           supabase
@@ -1307,6 +1310,10 @@ app.get(
               "profile_image",
               "is",
               null
+            )
+            .neq(
+              "profile_image",
+              ""
             ),
         ]);
 
@@ -1505,9 +1512,25 @@ app.get(
           "If-None-Match"
         );
 
+      /*
+        IMPORTANT:
+        Never allow the browser to keep an old
+        profile image indefinitely.
+      */
+
       res.set(
         "Cache-Control",
-        "public, max-age=0, must-revalidate"
+        "no-cache, no-store, must-revalidate"
+      );
+
+      res.set(
+        "Pragma",
+        "no-cache"
+      );
+
+      res.set(
+        "Expires",
+        "0"
       );
 
       res.set(
@@ -1718,9 +1741,9 @@ app.patch(
       */
 
       const freshImageUrl =
-  profileImage && updatedUser?.id
-    ? `${PUBLIC_API_BASE_URL}/api/users/${updatedUser.id}/image?v=${Date.now()}`
-    : "";
+        profileImage && updatedUser?.id
+          ? `${PUBLIC_API_BASE_URL}/api/users/${updatedUser.id}/image?v=${Date.now()}`
+          : "";
 
       return res.json({
         success: true,
@@ -1763,7 +1786,6 @@ app.patch(
     }
   }
 );
-
 /* =========================================================
    GET REPORTS
 ========================================================= */
@@ -3097,368 +3119,226 @@ app.post(
     }
   }
 );
-
 /* =========================================================
-   NOTIFICATIONS SYNC
+   SYNC NOTIFICATIONS
 ========================================================= */
 
 async function syncNotifications() {
   try {
-    /*
-      IMPORTANT:
-      No report images are fetched here.
-    */
-
     const [
       reportsResult,
-      usersResult,
       feedbackResult,
       messagesResult,
-    ] =
-      await Promise.all([
-        supabase
-          .from("reports")
-          .select(
-            "id, user_id, type, item_name, status, resolved_at, created_at"
-          )
-          .order(
-            "created_at",
-            {
-              ascending:
-                false,
-            }
-          ),
+      usersResult,
+    ] = await Promise.all([
+      supabase
+        .from("reports")
+        .select(
+          "id, item_name, status, reported_by, reporter_name, created_at"
+        )
+        .order("created_at", {
+          ascending: false,
+        }),
 
-        supabase
-          .from("users")
-          .select(
-            "id, name, email, created_at"
-          )
-          .order(
-            "created_at",
-            {
-              ascending:
-                false,
-            }
-          ),
+      supabase
+        .from("feedback")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        }),
 
-        supabase
-          .from("feedback")
-          .select(
-            "id, rating, created_at"
-          )
-          .order(
-            "created_at",
-            {
-              ascending:
-                false,
-            }
-          ),
+      supabase
+        .from("messages")
+        .select("*")
+        .order("created_at", {
+          ascending: false,
+        }),
 
-        supabase
-          .from("messages")
-          .select(
-            "id, sender_name, receiver_id, created_at"
-          )
-          .order(
-            "created_at",
-            {
-              ascending:
-                false,
-            }
-          ),
-      ]);
+      supabase
+        .from("users")
+        .select(
+          "id, name, email, created_at"
+        )
+        .order("created_at", {
+          ascending: false,
+        }),
+    ]);
+
+    const notifications = [];
 
     const reports =
-      reportsResult.data ||
-      [];
-
-    const users =
-      usersResult.data ||
-      [];
+      reportsResult.data || [];
 
     const feedback =
-      feedbackResult.data ||
-      [];
+      feedbackResult.data || [];
 
     const messages =
-      messagesResult.data ||
-      [];
+      messagesResult.data || [];
 
-    const notifications =
-      [];
+    const users =
+      usersResult.data || [];
 
     /* =====================================================
        REPORT NOTIFICATIONS
     ===================================================== */
 
-    reports.forEach(
-      (report) => {
-        notifications.push({
-          notification_key:
-            `admin-report-${report.id}`,
+    reports.forEach((report) => {
+      notifications.push({
+        notification_key:
+          `admin-report-${report.id}`,
 
-          recipient_role:
-            "admin",
+        recipient_role:
+          "admin",
 
-          recipient_id:
-            null,
+        recipient_id:
+          null,
 
-          type:
-            "report",
+        type:
+          "report",
 
-          title:
-            report.type ===
-            "found"
-              ? "New Found Report"
-              : "New Lost Report",
+        title:
+          "New Report",
 
-          description:
-            report.item_name ||
-            "A new report was submitted.",
+        description:
+          `${report.reporter_name || "A user"} submitted a ${report.type || "item"} report.`,
 
-          source_id:
-            report.id,
+        source_id:
+          report.id,
 
-          section:
-            "reports",
+        section:
+          "reports",
 
-          read:
-            false,
+        read:
+          false,
 
-          created_at:
-            report.created_at,
-        });
-
-        if (
-          report.status ===
-            "resolved" ||
-          report.status ===
-            "Resolved"
-        ) {
-          notifications.push({
-            notification_key:
-              `admin-resolved-${report.id}`,
-
-            recipient_role:
-              "admin",
-
-            recipient_id:
-              null,
-
-            type:
-              "resolved",
-
-            title:
-              "Item Reunited",
-
-            description:
-              report.item_name ||
-              "An item has been successfully claimed.",
-
-            source_id:
-              report.id,
-
-            section:
-              "reports",
-
-            read:
-              false,
-
-            created_at:
-              report.resolved_at ||
-              report.created_at,
-          });
-        }
-
-        if (
-          report.user_id
-        ) {
-          notifications.push({
-            notification_key:
-              `student-report-${report.id}`,
-
-            recipient_role:
-              "student",
-
-            recipient_id:
-              report.user_id,
-
-            type:
-              "report",
-
-            title:
-              report.type ===
-              "found"
-                ? "Found Report Submitted"
-                : "Lost Report Submitted",
-
-            description:
-              `${
-                report.item_name ||
-                "Your item"
-              } was successfully reported.`,
-
-            source_id:
-              report.id,
-
-            section:
-              "reports",
-
-            read:
-              false,
-
-            created_at:
-              report.created_at,
-          });
-
-          if (
-            report.status ===
-              "resolved" ||
-            report.status ===
-              "Resolved"
-          ) {
-            notifications.push({
-              notification_key:
-                `student-resolved-${report.id}`,
-
-              recipient_role:
-                "student",
-
-              recipient_id:
-                report.user_id,
-
-              type:
-                "resolved",
-
-              title:
-                "Item Reunited",
-
-              description:
-                `${
-                  report.item_name ||
-                  "Your item"
-                } has been successfully claimed.`,
-
-              source_id:
-                report.id,
-
-              section:
-                "reports",
-
-              read:
-                false,
-
-              created_at:
-                report.resolved_at ||
-                report.created_at,
-            });
-          }
-        }
-      }
-    );
+        created_at:
+          report.created_at,
+      });
+    });
 
     /* =====================================================
-       USER NOTIFICATIONS
+       NEW USER NOTIFICATIONS
     ===================================================== */
 
-    users.forEach(
-      (user) => {
-        notifications.push({
-          notification_key:
-            `admin-user-${user.id}`,
+    users.forEach((user) => {
+      notifications.push({
+        notification_key:
+          `admin-user-${user.id}`,
 
-          recipient_role:
-            "admin",
+        recipient_role:
+          "admin",
 
-          recipient_id:
-            null,
+        recipient_id:
+          null,
 
-          type:
-            "user",
+        type:
+          "user",
 
-          title:
-            "New User",
+        title:
+          "New User",
 
-          description:
-            `${
-              user.name ||
-              "A new user"
-            } joined Foundly.`,
+        description:
+          `${user.name || "A new user"} joined Foundly.`,
 
-          source_id:
-            user.id,
+        source_id:
+          user.id,
 
-          section:
-            "users",
+        section:
+          "users",
 
-          read:
-            false,
+        read:
+          false,
 
-          created_at:
-            user.created_at,
-        });
-      }
-    );
+        created_at:
+          user.created_at,
+      });
+    });
 
     /* =====================================================
        FEEDBACK NOTIFICATIONS
     ===================================================== */
 
-    feedback.forEach(
-      (item) => {
-        notifications.push({
-          notification_key:
-            `admin-feedback-${item.id}`,
+    feedback.forEach((item) => {
+      notifications.push({
+        notification_key:
+          `admin-feedback-${item.id}`,
 
-          recipient_role:
-            "admin",
+        recipient_role:
+          "admin",
 
-          recipient_id:
-            null,
+        recipient_id:
+          null,
 
-          type:
-            "feedback",
+        type:
+          "feedback",
 
-          title:
-            "New Feedback",
+        title:
+          "New Feedback",
 
-          description:
-            `${
-              item.rating ||
-              0
-            }/5 rating submitted.`,
+        description:
+          `${item.rating || 0}/5 rating submitted.`,
 
-          source_id:
-            item.id,
+        source_id:
+          item.id,
 
-          section:
-            "feedback",
+        section:
+          "feedback",
 
-          read:
-            false,
+        read:
+          false,
 
-          created_at:
-            item.created_at,
-        });
-      }
-    );
+        created_at:
+          item.created_at,
+      });
+    });
 
     /* =====================================================
        MESSAGE NOTIFICATIONS
     ===================================================== */
 
-    messages.forEach(
-      (item) => {
+    messages.forEach((item) => {
+      notifications.push({
+        notification_key:
+          `admin-message-${item.id}`,
+
+        recipient_role:
+          "admin",
+
+        recipient_id:
+          null,
+
+        type:
+          "message",
+
+        title:
+          "New Message",
+
+        description:
+          `${item.sender_name || "A user"} sent a message.`,
+
+        source_id:
+          item.id,
+
+        section:
+          "messages",
+
+        read:
+          false,
+
+        created_at:
+          item.created_at,
+      });
+
+      if (item.receiver_id) {
         notifications.push({
           notification_key:
-            `admin-message-${item.id}`,
+            `student-message-${item.id}`,
 
           recipient_role:
-            "admin",
+            "student",
 
           recipient_id:
-            null,
+            item.receiver_id,
 
           type:
             "message",
@@ -3467,10 +3347,7 @@ async function syncNotifications() {
             "New Message",
 
           description:
-            `${
-              item.sender_name ||
-              "A user"
-            } sent a message.`,
+            `${item.sender_name || "A Foundly Member"} sent you a message.`,
 
           source_id:
             item.id,
@@ -3484,51 +3361,11 @@ async function syncNotifications() {
           created_at:
             item.created_at,
         });
-
-        if (
-          item.receiver_id
-        ) {
-          notifications.push({
-            notification_key:
-              `student-message-${item.id}`,
-
-            recipient_role:
-              "student",
-
-            recipient_id:
-              item.receiver_id,
-
-            type:
-              "message",
-
-            title:
-              "New Message",
-
-            description:
-              `${
-                item.sender_name ||
-                "A Foundly Member"
-              } sent you a message.`,
-
-            source_id:
-              item.id,
-
-            section:
-              "messages",
-
-            read:
-              false,
-
-            created_at:
-              item.created_at,
-          });
-        }
       }
-    );
+    });
 
     if (
-      notifications.length ===
-      0
+      notifications.length === 0
     ) {
       return;
     }
@@ -3537,9 +3374,7 @@ async function syncNotifications() {
       error,
     } =
       await supabase
-        .from(
-          "notifications"
-        )
+        .from("notifications")
         .upsert(
           notifications,
           {
@@ -3566,6 +3401,7 @@ async function syncNotifications() {
   }
 }
 
+
 /* =========================================================
    GET NOTIFICATIONS
 ========================================================= */
@@ -3583,9 +3419,7 @@ app.get(
 
       let query =
         supabase
-          .from(
-            "notifications"
-          )
+          .from("notifications")
           .select("*")
           .order(
             "created_at",
@@ -3602,7 +3436,6 @@ app.get(
         if (!userId) {
           return res.status(400).json({
             success: false,
-
             message:
               "User ID is required for student notifications.",
           });
@@ -3633,16 +3466,18 @@ app.get(
       const {
         data,
         error,
-      } =
-        await query;
+      } = await query;
 
       if (error) {
+        console.error(
+          "❌ Get notifications error:",
+          error
+        );
+
         return res.status(500).json({
           success: false,
-
           message:
             "Unable to load notifications.",
-
           error:
             error.message,
         });
@@ -3650,24 +3485,25 @@ app.get(
 
       return res.json({
         success: true,
-
         notifications:
           data || [],
       });
 
     } catch (error) {
+      console.error(
+        "❌ Notifications server error:",
+        error
+      );
+
       return res.status(500).json({
         success: false,
-
         message:
           "Something went wrong while loading notifications.",
-
-        error:
-          error.message,
       });
     }
   }
 );
+
 
 /* =========================================================
    MARK NOTIFICATION READ
@@ -3684,7 +3520,6 @@ app.patch(
       if (!id) {
         return res.status(400).json({
           success: false,
-
           message:
             "Notification ID is required.",
         });
@@ -3693,29 +3528,29 @@ app.patch(
       const {
         data,
         error,
-      } =
-        await supabase
-          .from(
-            "notifications"
-          )
-          .update({
-            read:
-              true,
-          })
-          .eq(
-            "id",
-            id
-          )
-          .select("*")
-          .single();
+      } = await supabase
+        .from("notifications")
+        .update({
+          read:
+            true,
+        })
+        .eq(
+          "id",
+          id
+        )
+        .select("*")
+        .single();
 
       if (error) {
+        console.error(
+          "❌ Mark notification read error:",
+          error
+        );
+
         return res.status(500).json({
           success: false,
-
           message:
             "Unable to update notification.",
-
           error:
             error.message,
         });
@@ -3723,24 +3558,25 @@ app.patch(
 
       return res.json({
         success: true,
-
         notification:
           data,
       });
 
     } catch (error) {
+      console.error(
+        "❌ Notification read error:",
+        error
+      );
+
       return res.status(500).json({
         success: false,
-
         message:
           "Something went wrong while updating notification.",
-
-        error:
-          error.message,
       });
     }
   }
 );
+
 
 /* =========================================================
    MARK ALL NOTIFICATIONS READ
@@ -3762,7 +3598,6 @@ app.patch(
         if (!userId) {
           return res.status(400).json({
             success: false,
-
             message:
               "User ID is required.",
           });
@@ -3770,31 +3605,31 @@ app.patch(
 
         const {
           error,
-        } =
-          await supabase
-            .from(
-              "notifications"
-            )
-            .update({
-              read:
-                true,
-            })
-            .eq(
-              "recipient_role",
-              "student"
-            )
-            .eq(
-              "recipient_id",
-              userId
-            );
+        } = await supabase
+          .from("notifications")
+          .update({
+            read:
+              true,
+          })
+          .eq(
+            "recipient_role",
+            "student"
+          )
+          .eq(
+            "recipient_id",
+            userId
+          );
 
         if (error) {
+          console.error(
+            "❌ Student read-all error:",
+            error
+          );
+
           return res.status(500).json({
             success: false,
-
             message:
               "Unable to mark notifications as read.",
-
             error:
               error.message,
           });
@@ -3806,27 +3641,27 @@ app.patch(
       ) {
         const {
           error,
-        } =
-          await supabase
-            .from(
-              "notifications"
-            )
-            .update({
-              read:
-                true,
-            })
-            .eq(
-              "recipient_role",
-              "admin"
-            );
+        } = await supabase
+          .from("notifications")
+          .update({
+            read:
+              true,
+          })
+          .eq(
+            "recipient_role",
+            "admin"
+          );
 
         if (error) {
+          console.error(
+            "❌ Admin read-all error:",
+            error
+          );
+
           return res.status(500).json({
             success: false,
-
             message:
               "Unable to mark notifications as read.",
-
             error:
               error.message,
           });
@@ -3835,7 +3670,6 @@ app.patch(
       } else {
         return res.status(400).json({
           success: false,
-
           message:
             "Notification role is required.",
         });
@@ -3843,24 +3677,25 @@ app.patch(
 
       return res.json({
         success: true,
-
         message:
           "All notifications marked as read.",
       });
 
     } catch (error) {
+      console.error(
+        "❌ Read-all notification error:",
+        error
+      );
+
       return res.status(500).json({
         success: false,
-
         message:
           "Something went wrong while updating notifications.",
-
-        error:
-          error.message,
       });
     }
   }
 );
+
 
 /* =========================================================
    START SERVER
