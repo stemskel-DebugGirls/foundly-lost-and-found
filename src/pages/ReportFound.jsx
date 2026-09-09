@@ -35,10 +35,156 @@ function ReportFound({
   const [submitting, setSubmitting] = useState(false);
 
   /* =====================================================
-     IMAGE
-  ===================================================== */
+     IMAGE COMPRESSION
+     ===================================================== */
 
-  const handleImageChange = (e) => {
+  const compressImage = (
+    file,
+    maxWidth = 1280,
+    maxHeight = 1280,
+    quality = 0.72,
+    maxBytes = 1500 * 1024
+  ) => {
+    return new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          let width = img.naturalWidth;
+          let height = img.naturalHeight;
+
+          /* Keep original aspect ratio */
+          const scale = Math.min(
+            1,
+            maxWidth / width,
+            maxHeight / height
+          );
+
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d");
+
+          if (!ctx) {
+            URL.revokeObjectURL(objectUrl);
+            reject(
+              new Error("Unable to process this image.")
+            );
+            return;
+          }
+
+          /* White background avoids black/transparent areas */
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, width, height);
+
+          ctx.drawImage(
+            img,
+            0,
+            0,
+            width,
+            height
+          );
+
+          /*
+            Start with quality 0.72.
+            If the result is still too large,
+            gradually reduce quality.
+          */
+          let currentQuality = quality;
+          let result = canvas.toDataURL(
+            "image/jpeg",
+            currentQuality
+          );
+
+          while (
+            result.length * 0.75 > maxBytes &&
+            currentQuality > 0.42
+          ) {
+            currentQuality -= 0.08;
+
+            result = canvas.toDataURL(
+              "image/jpeg",
+              currentQuality
+            );
+          }
+
+          /*
+            If it is still too large, resize once more.
+          */
+          if (
+            result.length * 0.75 > maxBytes &&
+            width > 900
+          ) {
+            const resizeRatio = 900 / width;
+
+            const smallerCanvas =
+              document.createElement("canvas");
+
+            smallerCanvas.width = 900;
+            smallerCanvas.height = Math.round(
+              height * resizeRatio
+            );
+
+            const smallerCtx =
+              smallerCanvas.getContext("2d");
+
+            if (smallerCtx) {
+              smallerCtx.fillStyle = "#ffffff";
+              smallerCtx.fillRect(
+                0,
+                0,
+                smallerCanvas.width,
+                smallerCanvas.height
+              );
+
+              smallerCtx.drawImage(
+                img,
+                0,
+                0,
+                smallerCanvas.width,
+                smallerCanvas.height
+              );
+
+              result =
+                smallerCanvas.toDataURL(
+                  "image/jpeg",
+                  0.62
+                );
+            }
+          }
+
+          URL.revokeObjectURL(objectUrl);
+
+          resolve(result);
+        } catch (compressionError) {
+          URL.revokeObjectURL(objectUrl);
+          reject(compressionError);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(
+          new Error(
+            "Unable to read this image. Please try another photo."
+          )
+        );
+      };
+
+      img.src = objectUrl;
+    });
+  };
+
+  /* =====================================================
+     IMAGE
+     ===================================================== */
+
+  const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
 
     if (!file) return;
@@ -48,32 +194,42 @@ function ReportFound({
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
+    /*
+      Allow bigger original photos because iPad photos
+      can easily be larger than 5MB.
+      We compress them before storing/sending.
+    */
+    if (file.size > 15 * 1024 * 1024) {
       setError(
-        "Image is too large. Please choose an image below 5MB."
+        "Image is too large. Please choose an image below 15MB."
       );
       return;
     }
 
-    const reader = new FileReader();
+    setError("");
 
-    reader.onload = () => {
-      setImage(reader.result);
-      setError("");
-    };
+    try {
+      const compressedImage =
+        await compressImage(file);
 
-    reader.onerror = () => {
-      setError(
-        "Unable to read this image. Please try another photo."
+      setImage(compressedImage);
+    } catch (compressionError) {
+      console.error(
+        "Image compression error:",
+        compressionError
       );
-    };
 
-    reader.readAsDataURL(file);
+      setImage(null);
+
+      setError(
+        "Unable to process this image. Please try another photo."
+      );
+    }
   };
 
   /* =====================================================
      REMOVE IMAGE
-  ===================================================== */
+     ===================================================== */
 
   const removeImage = () => {
     setImage(null);
@@ -81,12 +237,14 @@ function ReportFound({
 
   /* =====================================================
      GET CURRENT USER
-  ===================================================== */
+     ===================================================== */
 
   const getCurrentUser = () => {
     try {
       const storedUser = JSON.parse(
-        localStorage.getItem("foundlyCurrentUser") || "null"
+        localStorage.getItem(
+          "foundlyCurrentUser"
+        ) || "null"
       );
 
       return storedUser;
@@ -102,7 +260,7 @@ function ReportFound({
 
   /* =====================================================
      SUBMIT
-  ===================================================== */
+     ===================================================== */
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -204,6 +362,11 @@ function ReportFound({
             phone:
               phone.trim(),
 
+            /*
+              IMPORTANT:
+              image is already compressed before
+              it reaches this request.
+            */
             image:
               image || null,
           }),
@@ -557,7 +720,7 @@ function ReportFound({
 
   /* =====================================================
      UI
-  ===================================================== */
+     ===================================================== */
 
   return (
     <div className="report-found-page">
@@ -761,8 +924,12 @@ function ReportFound({
                 </strong>
 
                 <span>
-                  PNG, JPG or JPEG · Max 5MB
+                  PNG, JPG or JPEG · Max 15MB original
                 </span>
+
+                <small>
+                  Image will be automatically compressed for faster upload.
+                </small>
 
                 <input
                   type="file"

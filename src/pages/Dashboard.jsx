@@ -657,13 +657,17 @@ useEffect(() => {
 
   const realStudents =
     registeredUsers
-      .filter(
-        (user) =>
+      .filter((user) => {
+        const email =
           user.email
             ?.trim()
-            .toLowerCase() !==
-          userEmail
-      )
+            .toLowerCase();
+
+        return (
+          email !== userEmail &&
+          email !== "admin@foundly.edu.my"
+        );
+      })
       .map((user) => {
         const image =
           user.profileImage ||

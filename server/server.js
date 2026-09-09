@@ -9,6 +9,10 @@ require("dotenv").config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const PUBLIC_API_BASE_URL =
+  process.env.PUBLIC_API_URL ||
+  "https://foundly-lost-and-found.onrender.com";
+
 /* =========================================================
    ENVIRONMENT
 ========================================================= */
@@ -34,7 +38,6 @@ const supabase = createClient(
 
 /* =========================================================
    CORS
-   Allow local development + Render frontend
 ========================================================= */
 
 const allowedOrigins = [
@@ -90,14 +93,52 @@ app.use(
    BODY PARSER
 ========================================================= */
 
-app.use(express.json({ limit: "10mb" }));
+app.use(
+  express.json({
+    limit: "10mb",
+  })
+);
 
 /* =========================================================
-   HELPER FUNCTIONS
+   COLUMNS
 ========================================================= */
 
-function mapUser(user) {
+const REPORT_COLUMNS = [
+  "id",
+  "user_id",
+  "type",
+  "item_name",
+  "description",
+  "location",
+  "date_lost",
+  "time_lost",
+  "phone",
+  "status",
+  "reported_by",
+  "reporter_name",
+  "claimed_by",
+  "claimed_by_name",
+  "resolved_at",
+  "created_at",
+].join(", ");
+
+const USER_PUBLIC_COLUMNS =
+  "id, name, email, points, created_at";
+
+const USER_PROFILE_COLUMNS =
+  "id, name, email, points, profile_image, created_at";
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function mapUser(user, includeImage = false) {
   if (!user) return null;
+
+  const imageUrl =
+    user.id
+      ? `${PUBLIC_API_BASE_URL}/api/users/${user.id}/image`
+      : "";
 
   return {
     id: user.id,
@@ -105,46 +146,81 @@ function mapUser(user) {
     email: user.email,
     points: user.points ?? 0,
 
-    profileImage: user.profile_image || "",
-    profile_image: user.profile_image || "",
+    profileImage: includeImage
+      ? user.profile_image || ""
+      : imageUrl,
 
-    createdAt: user.created_at || null,
-    created_at: user.created_at || null,
+    profile_image: includeImage
+      ? user.profile_image || ""
+      : imageUrl,
+
+    createdAt:
+      user.created_at || null,
+
+    created_at:
+      user.created_at || null,
   };
 }
 
-function mapReport(report) {
+function mapReport(
+  report,
+  includeImage = false
+) {
   if (!report) return null;
 
   return {
     id: report.id,
-    type: report.type,
 
-    itemName: report.item_name,
-    description: report.description,
+    type:
+      report.type,
 
-    location: report.location,
+    itemName:
+      report.item_name,
 
-    date: report.date_lost,
-    time: report.time_lost || "",
+    description:
+      report.description,
 
-    phone: report.phone,
+    location:
+      report.location,
 
-    image: report.image || null,
+    date:
+      report.date_lost,
 
-    status: report.status,
+    time:
+      report.time_lost || "",
 
-    reportedBy: report.reported_by,
-    reporterName: report.reporter_name,
+    phone:
+      report.phone,
 
-    claimedBy: report.claimed_by || "",
-    claimedByName: report.claimed_by_name || "",
+    image: includeImage
+      ? report.image || null
+      : report.id
+      ? `${PUBLIC_API_BASE_URL}/api/reports/${report.id}/image`
+      : null,
 
-    resolvedAt: report.resolved_at || "",
+    status:
+      report.status,
 
-    createdAt: report.created_at,
+    reportedBy:
+      report.reported_by,
 
-    userId: report.user_id,
+    reporterName:
+      report.reporter_name,
+
+    claimedBy:
+      report.claimed_by || "",
+
+    claimedByName:
+      report.claimed_by_name || "",
+
+    resolvedAt:
+      report.resolved_at || "",
+
+    createdAt:
+      report.created_at,
+
+    userId:
+      report.user_id,
   };
 }
 
@@ -152,18 +228,29 @@ function mapFeedback(item) {
   if (!item) return null;
 
   return {
-    id: item.id,
+    id:
+      item.id,
 
-    userId: item.user_id || null,
+    userId:
+      item.user_id || null,
 
-    name: item.name,
-    email: item.email,
+    name:
+      item.name,
 
-    rating: item.rating,
-    category: item.category,
-    comment: item.comment,
+    email:
+      item.email,
 
-    createdAt: item.created_at,
+    rating:
+      item.rating,
+
+    category:
+      item.category,
+
+    comment:
+      item.comment,
+
+    createdAt:
+      item.created_at,
   };
 }
 
@@ -171,33 +258,47 @@ function mapMessage(item) {
   if (!item) return null;
 
   return {
-    id: item.id,
+    id:
+      item.id,
 
-    reportId: item.report_id || null,
+    reportId:
+      item.report_id || null,
 
-    senderId: item.sender_id,
-    receiverId: item.receiver_id,
+    senderId:
+      item.sender_id,
 
-    senderEmail: item.sender_email,
-    senderName: item.sender_name,
+    receiverId:
+      item.receiver_id,
 
-    receiverEmail: item.receiver_email,
-    receiverName: item.receiver_name,
+    senderEmail:
+      item.sender_email,
 
-    message: item.message,
+    senderName:
+      item.sender_name,
 
-    createdAt: item.created_at,
+    receiverEmail:
+      item.receiver_email,
+
+    receiverName:
+      item.receiver_name,
+
+    message:
+      item.message,
+
+    createdAt:
+      item.created_at,
   };
 }
 
 /* =========================================================
-   BASIC ROUTES
+   BASIC
 ========================================================= */
 
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "Foundly API is running! 💗",
+    message:
+      "Foundly API is running! 💗",
   });
 });
 
@@ -205,7 +306,8 @@ app.get("/api/health", (req, res) => {
   res.json({
     success: true,
     status: "OK",
-    service: "Foundly Backend",
+    service:
+      "Foundly Backend",
   });
 });
 
@@ -213,290 +315,375 @@ app.get("/api/health", (req, res) => {
    TEST SUPABASE
 ========================================================= */
 
-app.get("/api/test-supabase", async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, name, email, points")
-      .limit(5);
+app.get(
+  "/api/test-supabase",
+  async (req, res) => {
+    try {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("users")
+        .select(
+          "id, name, email, points"
+        )
+        .limit(5);
 
-    if (error) {
-      console.error("❌ Supabase test error:", error);
+      if (error) {
+        console.error(
+          "❌ Supabase test error:",
+          error
+        );
 
+        return res.status(500).json({
+          success: false,
+          message:
+            "Unable to connect to Supabase.",
+          error:
+            error.message,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          "Supabase connection successful! 💗",
+        users:
+          data || [],
+      });
+
+    } catch (error) {
       return res.status(500).json({
         success: false,
-        message: "Unable to connect to Supabase.",
-        error: error.message,
+        message:
+          "Server error.",
+        error:
+          error.message,
       });
     }
-
-    return res.json({
-      success: true,
-      message: "Supabase connection successful! 💗",
-      users: data || [],
-    });
-  } catch (error) {
-    console.error("❌ Test Supabase error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Server error.",
-      error: error.message,
-    });
   }
-});
+);
 
 /* =========================================================
    SIGN UP
 ========================================================= */
 
-app.post("/api/signup", async (req, res) => {
-  try {
-    const {
-      name,
-      email,
-      password,
-      confirmPassword,
-    } = req.body;
+app.post(
+  "/api/signup",
+  async (req, res) => {
+    try {
+      const {
+        name,
+        email,
+        password,
+        confirmPassword,
+      } = req.body;
 
-    const cleanName = String(name || "").trim();
+      const cleanName =
+        String(name || "")
+          .trim();
 
-    const cleanEmail = String(email || "")
-      .trim()
-      .toLowerCase();
+      const cleanEmail =
+        String(email || "")
+          .trim()
+          .toLowerCase();
 
-    if (!cleanName) {
-      return res.status(400).json({
-        success: false,
-        message: "Name is required.",
-      });
-    }
+      if (!cleanName) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Name is required.",
+        });
+      }
 
-    if (!cleanEmail) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required.",
-      });
-    }
+      if (!cleanEmail) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Email is required.",
+        });
+      }
 
-    if (!cleanEmail.endsWith("@moe-dl.edu.my")) {
-      return res.status(400).json({
-        success: false,
+      if (
+        !cleanEmail.endsWith(
+          "@moe-dl.edu.my"
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Please use your Delima email ending with @moe-dl.edu.my.",
+        });
+      }
+
+      if (!password) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Password is required.",
+        });
+      }
+
+      if (
+        String(password).length < 6
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Password must be at least 6 characters.",
+        });
+      }
+
+      if (
+        password !==
+        confirmPassword
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Passwords do not match.",
+        });
+      }
+
+      const {
+        data: existingUser,
+        error: existingUserError,
+      } =
+        await supabase
+          .from("users")
+          .select(
+            "id, email"
+          )
+          .eq(
+            "email",
+            cleanEmail
+          )
+          .maybeSingle();
+
+      if (existingUserError) {
+        console.error(
+          "❌ Existing user check error:",
+          existingUserError
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            "Unable to check existing account.",
+          error:
+            existingUserError.message,
+        });
+      }
+
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "An account with this Delima email already exists.",
+        });
+      }
+
+      const passwordHash =
+        await bcrypt.hash(
+          String(password),
+          12
+        );
+
+      const {
+        data: newUser,
+        error: insertError,
+      } =
+        await supabase
+          .from("users")
+          .insert([
+            {
+              name:
+                cleanName,
+
+              email:
+                cleanEmail,
+
+              password:
+                passwordHash,
+
+              points:
+                0,
+            },
+          ])
+          .select(
+            USER_PROFILE_COLUMNS
+          )
+          .single();
+
+      if (insertError) {
+        console.error(
+          "❌ Create user error:",
+          insertError
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            "Unable to create account.",
+          error:
+            insertError.message,
+        });
+      }
+
+      return res.status(201).json({
+        success: true,
         message:
-          "Please use your Delima email ending with @moe-dl.edu.my.",
+          "Account created successfully! 💗",
+
+        user:
+          mapUser(
+            newUser,
+            false
+          ),
       });
-    }
 
-    if (!password) {
-      return res.status(400).json({
-        success: false,
-        message: "Password is required.",
-      });
-    }
-
-    if (String(password).length < 6) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Password must be at least 6 characters.",
-      });
-    }
-
-    if (password !== confirmPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Passwords do not match.",
-      });
-    }
-
-    const {
-      data: existingUser,
-      error: existingUserError,
-    } = await supabase
-      .from("users")
-      .select("id, email")
-      .eq("email", cleanEmail)
-      .maybeSingle();
-
-    if (existingUserError) {
-      console.error(
-        "❌ Existing user check error:",
-        existingUserError
-      );
-
+    } catch (error) {
       return res.status(500).json({
         success: false,
-        message: "Unable to check existing account.",
-      });
-    }
-
-    if (existingUser) {
-      return res.status(409).json({
-        success: false,
         message:
-          "An account with this Delima email already exists.",
+          "Something went wrong during signup.",
+        error:
+          error.message,
       });
     }
-
-    const passwordHash = await bcrypt.hash(
-      String(password),
-      12
-    );
-
-    const {
-      data: newUser,
-      error: insertError,
-    } = await supabase
-      .from("users")
-      .insert([
-        {
-          name: cleanName,
-          email: cleanEmail,
-          password: passwordHash,
-          points: 0,
-        },
-      ])
-      .select(
-        "id, name, email, points, profile_image, created_at"
-      )
-      .single();
-
-    if (insertError) {
-      console.error(
-        "❌ Create user error:",
-        insertError
-      );
-
-      return res.status(500).json({
-        success: false,
-        message: "Unable to create account.",
-        error: insertError.message,
-      });
-    }
-
-    return res.status(201).json({
-      success: true,
-      message: "Account created successfully! 💗",
-      user: mapUser(newUser),
-    });
-  } catch (error) {
-    console.error(
-      "❌ Signup server error:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Something went wrong during signup.",
-    });
   }
-});
+);
 
 /* =========================================================
    LOGIN
 ========================================================= */
 
-app.post("/api/login", async (req, res) => {
-  try {
-    const {
-      email,
-      password,
-    } = req.body;
+app.post(
+  "/api/login",
+  async (req, res) => {
+    try {
+      const {
+        email,
+        password,
+      } = req.body;
 
-    const cleanEmail = String(email || "")
-      .trim()
-      .toLowerCase();
+      const cleanEmail =
+        String(email || "")
+          .trim()
+          .toLowerCase();
 
-    if (!cleanEmail) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required.",
-      });
-    }
+      if (!cleanEmail) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Email is required.",
+        });
+      }
 
-    if (!cleanEmail.endsWith("@moe-dl.edu.my")) {
-      return res.status(400).json({
-        success: false,
+      if (
+        !cleanEmail.endsWith(
+          "@moe-dl.edu.my"
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Please use your official Delima email.",
+        });
+      }
+
+      if (!password) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Password is required.",
+        });
+      }
+
+      /*
+        IMPORTANT:
+        Do not load profile_image during login.
+      */
+
+      const {
+        data: user,
+        error: userError,
+      } =
+        await supabase
+          .from("users")
+          .select(
+            "id, name, email, password, points, created_at"
+          )
+          .eq(
+            "email",
+            cleanEmail
+          )
+          .maybeSingle();
+
+      if (userError) {
+        console.error(
+          "❌ Login user lookup error:",
+          userError
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            "Unable to access your account.",
+          error:
+            userError.message,
+        });
+      }
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Email or password is incorrect. Please try again.",
+        });
+      }
+
+      const passwordMatch =
+        await bcrypt.compare(
+          String(password),
+          user.password
+        );
+
+      if (!passwordMatch) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Email or password is incorrect. Please try again.",
+        });
+      }
+
+      return res.json({
+        success: true,
         message:
-          "Please use your official Delima email.",
+          "Login successful! 💗",
+
+        user: {
+          ...mapUser(
+            user,
+            false
+          ),
+
+          reports:
+            0,
+        },
       });
-    }
 
-    if (!password) {
-      return res.status(400).json({
-        success: false,
-        message: "Password is required.",
-      });
-    }
-
-    const {
-      data: user,
-      error: userError,
-    } = await supabase
-      .from("users")
-      .select(
-        "id, name, email, password, points, profile_image, created_at"
-      )
-      .eq("email", cleanEmail)
-      .maybeSingle();
-
-    if (userError) {
-      console.error(
-        "❌ Login user lookup error:",
-        userError
-      );
-
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
-          "Unable to access your account.",
+          "Something went wrong during login.",
+        error:
+          error.message,
       });
     }
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message:
-          "Email or password is incorrect. Please try again.",
-      });
-    }
-
-    const passwordMatch = await bcrypt.compare(
-      String(password),
-      user.password
-    );
-
-    if (!passwordMatch) {
-      return res.status(401).json({
-        success: false,
-        message:
-          "Email or password is incorrect. Please try again.",
-      });
-    }
-
-    return res.json({
-      success: true,
-      message: "Login successful! 💗",
-
-      user: {
-        ...mapUser(user),
-        reports: 0,
-      },
-    });
-  } catch (error) {
-    console.error(
-      "❌ Login server error:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Something went wrong during login.",
-    });
   }
-});
+);
 
 /* =========================================================
    FORGOT PASSWORD
@@ -506,11 +693,12 @@ app.post(
   "/api/forgot-password",
   async (req, res) => {
     try {
-      const cleanEmail = String(
-        req.body.email || ""
-      )
-        .trim()
-        .toLowerCase();
+      const cleanEmail =
+        String(
+          req.body.email || ""
+        )
+          .trim()
+          .toLowerCase();
 
       if (!cleanEmail) {
         return res.status(400).json({
@@ -520,7 +708,11 @@ app.post(
         });
       }
 
-      if (!cleanEmail.endsWith("@moe-dl.edu.my")) {
+      if (
+        !cleanEmail.endsWith(
+          "@moe-dl.edu.my"
+        )
+      ) {
         return res.status(400).json({
           success: false,
           message:
@@ -528,22 +720,22 @@ app.post(
         });
       }
 
-      /* Find user */
       const {
         data: user,
         error: userError,
-      } = await supabase
-        .from("users")
-        .select("id, name, email")
-        .eq("email", cleanEmail)
-        .maybeSingle();
+      } =
+        await supabase
+          .from("users")
+          .select(
+            "id, name, email"
+          )
+          .eq(
+            "email",
+            cleanEmail
+          )
+          .maybeSingle();
 
       if (userError) {
-        console.error(
-          "❌ Forgot password user lookup error:",
-          userError
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -561,54 +753,55 @@ app.post(
         });
       }
 
-      /* Invalidate old unused reset requests */
-      const {
-        error: invalidateError,
-      } = await supabase
+      await supabase
         .from("password_resets")
         .update({
           used: true,
         })
-        .eq("user_id", user.id)
-        .eq("used", false);
-
-      if (invalidateError) {
-        console.error(
-          "⚠️ Unable to invalidate previous reset requests:",
-          invalidateError
+        .eq(
+          "user_id",
+          user.id
+        )
+        .eq(
+          "used",
+          false
         );
-      }
 
-      /* Generate token */
       const resetToken =
-        crypto.randomBytes(32).toString("hex");
+        crypto
+          .randomBytes(32)
+          .toString("hex");
 
-      /* 15 minutes */
       const expiresAt =
         new Date(
-          Date.now() + 15 * 60 * 1000
+          Date.now() +
+          15 * 60 * 1000
         ).toISOString();
 
-      /* Save into password_resets */
       const {
         error: insertError,
-      } = await supabase
-        .from("password_resets")
-        .insert([
-          {
-            user_id: user.id,
-            token: resetToken,
-            expires_at: expiresAt,
-            used: false,
-          },
-        ]);
+      } =
+        await supabase
+          .from(
+            "password_resets"
+          )
+          .insert([
+            {
+              user_id:
+                user.id,
+
+              token:
+                resetToken,
+
+              expires_at:
+                expiresAt,
+
+              used:
+                false,
+            },
+          ]);
 
       if (insertError) {
-        console.error(
-          "❌ Password reset insert error:",
-          insertError
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -618,13 +811,6 @@ app.post(
         });
       }
 
-      /*
-        DEVELOPMENT MODE
-
-        Token is returned directly to the frontend
-        because no email service has been connected yet.
-      */
-
       return res.json({
         success: true,
         message:
@@ -632,16 +818,14 @@ app.post(
         resetToken,
         expiresAt,
       });
-    } catch (error) {
-      console.error(
-        "❌ Forgot password server error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while processing your password reset request.",
+        error:
+          error.message,
       });
     }
   }
@@ -677,7 +861,9 @@ app.post(
         });
       }
 
-      if (String(newPassword).length < 6) {
+      if (
+        String(newPassword).length < 6
+      ) {
         return res.status(400).json({
           success: false,
           message:
@@ -696,24 +882,24 @@ app.post(
         });
       }
 
-      /* Find token */
       const {
         data: resetRequest,
         error: resetLookupError,
-      } = await supabase
-        .from("password_resets")
-        .select(
-          "id, user_id, token, expires_at, used"
-        )
-        .eq("token", token)
-        .maybeSingle();
+      } =
+        await supabase
+          .from(
+            "password_resets"
+          )
+          .select(
+            "id, user_id, token, expires_at, used"
+          )
+          .eq(
+            "token",
+            token
+          )
+          .maybeSingle();
 
       if (resetLookupError) {
-        console.error(
-          "❌ Reset token lookup error:",
-          resetLookupError
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -739,19 +925,25 @@ app.post(
         });
       }
 
-      /* Check expiry */
-      const expiryTime = new Date(
-        resetRequest.expires_at
-      ).getTime();
+      const expiryTime =
+        new Date(
+          resetRequest.expires_at
+        ).getTime();
 
       if (
-        Number.isNaN(expiryTime) ||
-        expiryTime < Date.now()
+        Number.isNaN(
+          expiryTime
+        ) ||
+        expiryTime <
+          Date.now()
       ) {
         await supabase
-          .from("password_resets")
+          .from(
+            "password_resets"
+          )
           .update({
-            used: true,
+            used:
+              true,
           })
           .eq(
             "id",
@@ -765,38 +957,32 @@ app.post(
         });
       }
 
-      /* Hash new password */
       const passwordHash =
         await bcrypt.hash(
           String(newPassword),
           12
         );
 
-      /* Update user password */
       const {
         data: updatedUser,
         error: updatePasswordError,
-      } = await supabase
-        .from("users")
-        .update({
-          password:
-            passwordHash,
-        })
-        .eq(
-          "id",
-          resetRequest.user_id
-        )
-        .select(
-          "id, name, email, points, profile_image, created_at"
-        )
-        .single();
+      } =
+        await supabase
+          .from("users")
+          .update({
+            password:
+              passwordHash,
+          })
+          .eq(
+            "id",
+            resetRequest.user_id
+          )
+          .select(
+            USER_PROFILE_COLUMNS
+          )
+          .single();
 
       if (updatePasswordError) {
-        console.error(
-          "❌ Password update error:",
-          updatePasswordError
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -806,43 +992,38 @@ app.post(
         });
       }
 
-      /* Mark token as used */
-      const {
-        error: markUsedError,
-      } = await supabase
-        .from("password_resets")
+      await supabase
+        .from(
+          "password_resets"
+        )
         .update({
-          used: true,
+          used:
+            true,
         })
         .eq(
           "id",
           resetRequest.id
         );
 
-      if (markUsedError) {
-        console.error(
-          "⚠️ Password reset succeeded but token could not be marked as used:",
-          markUsedError
-        );
-      }
-
       return res.json({
         success: true,
         message:
           "Your password has been reset successfully! You can now login with your new password. 💗",
-        user:
-          mapUser(updatedUser),
-      });
-    } catch (error) {
-      console.error(
-        "❌ Reset password server error:",
-        error
-      );
 
+        user:
+          mapUser(
+            updatedUser,
+            false
+          ),
+      });
+
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while resetting your password.",
+        error:
+          error.message,
       });
     }
   }
@@ -856,20 +1037,26 @@ app.get(
   "/api/users",
   async (req, res) => {
     try {
+      /*
+        IMPORTANT:
+        Leaderboard does not need profile_image.
+      */
+
       const {
         data,
         error,
-      } = await supabase
-        .from("users")
-        .select(
-          "id, name, email, points, profile_image, created_at"
-        )
-        .order(
-          "points",
-          {
-            ascending: false,
-          }
-        );
+      } =
+        await supabase
+          .from("users")
+          .select(
+            USER_PUBLIC_COLUMNS
+          )
+          .order(
+            "points",
+            {
+              ascending: false,
+            }
+          );
 
       if (error) {
         console.error(
@@ -888,22 +1075,123 @@ app.get(
 
       return res.json({
         success: true,
-        users:
-          (data || []).map(
-            mapUser
-          ),
-      });
-    } catch (error) {
-      console.error(
-        "❌ Users server error:",
-        error
-      );
 
+        users:
+          (data || [])
+            .map(
+              (user) =>
+                mapUser(
+                  user,
+                  false
+                )
+            ),
+      });
+
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while loading users.",
+        error:
+          error.message,
       });
+    }
+  }
+);
+
+/* =========================================================
+   USER PROFILE IMAGE
+========================================================= */
+
+app.get(
+  "/api/users/:id/image",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
+
+      if (!id) {
+        return res
+          .status(400)
+          .end();
+      }
+
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from("users")
+          .select(
+            "profile_image"
+          )
+          .eq(
+            "id",
+            id
+          )
+          .maybeSingle();
+
+      if (error) {
+        console.error(
+          "❌ User image error:",
+          error
+        );
+
+        return res
+          .status(500)
+          .end();
+      }
+
+      if (
+        !data?.profile_image
+      ) {
+        return res
+          .status(404)
+          .end();
+      }
+
+      const raw =
+        String(
+          data.profile_image
+        );
+
+      const match =
+        raw.match(
+          /^data:([^;]+);base64,(.+)$/s
+        );
+
+      if (!match) {
+        return res
+          .status(415)
+          .end();
+      }
+
+      res.set(
+        "Cache-Control",
+        "public, max-age=86400, immutable"
+      );
+
+      res.set(
+        "Content-Type",
+        match[1]
+      );
+
+      return res.send(
+        Buffer.from(
+          match[2],
+          "base64"
+        )
+      );
+
+    } catch (error) {
+      console.error(
+        "❌ User image server error:",
+        error
+      );
+
+      return res
+        .status(500)
+        .end();
     }
   }
 );
@@ -916,9 +1204,8 @@ app.patch(
   "/api/users/:id/profile",
   async (req, res) => {
     try {
-      const {
-        id,
-      } = req.params;
+      const { id } =
+        req.params;
 
       const {
         name,
@@ -971,31 +1258,27 @@ app.patch(
       const {
         data: updatedUser,
         error,
-      } = await supabase
-        .from("users")
-        .update({
-          name:
-            cleanName,
+      } =
+        await supabase
+          .from("users")
+          .update({
+            name:
+              cleanName,
 
-          profile_image:
-            profileImage ||
-            null,
-        })
-        .eq(
-          "id",
-          id
-        )
-        .select(
-          "id, name, email, points, profile_image, created_at"
-        )
-        .single();
+            profile_image:
+              profileImage ||
+              null,
+          })
+          .eq(
+            "id",
+            id
+          )
+          .select(
+            USER_PROFILE_COLUMNS
+          )
+          .single();
 
       if (error) {
-        console.error(
-          "❌ Update profile error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -1009,21 +1292,21 @@ app.patch(
         success: true,
         message:
           "Profile saved successfully! 💗",
+
         user:
           mapUser(
-            updatedUser
+            updatedUser,
+            true
           ),
       });
-    } catch (error) {
-      console.error(
-        "❌ Profile server error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while saving your profile.",
+        error:
+          error.message,
       });
     }
   }
@@ -1037,18 +1320,26 @@ app.get(
   "/api/reports",
   async (req, res) => {
     try {
+      /*
+        IMPORTANT:
+        Do NOT load image from Supabase here.
+      */
+
       const {
         data,
         error,
-      } = await supabase
-        .from("reports")
-        .select("*")
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        );
+      } =
+        await supabase
+          .from("reports")
+          .select(
+            REPORT_COLUMNS
+          )
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          );
 
       if (error) {
         console.error(
@@ -1067,28 +1358,127 @@ app.get(
 
       return res.json({
         success: true,
-        reports:
-          (data || []).map(
-            mapReport
-          ),
-      });
-    } catch (error) {
-      console.error(
-        "❌ Reports server error:",
-        error
-      );
 
+        reports:
+          (data || [])
+            .map(
+              (report) =>
+                mapReport(
+                  report,
+                  false
+                )
+            ),
+      });
+
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while loading reports.",
+        error:
+          error.message,
       });
     }
   }
 );
 
 /* =========================================================
-   CREATE LOST / FOUND REPORT
+   GET ONE REPORT IMAGE
+========================================================= */
+
+app.get(
+  "/api/reports/:id/image",
+  async (req, res) => {
+    try {
+      const { id } =
+        req.params;
+
+      if (!id) {
+        return res
+          .status(400)
+          .end();
+      }
+
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from("reports")
+          .select(
+            "image"
+          )
+          .eq(
+            "id",
+            id
+          )
+          .maybeSingle();
+
+      if (error) {
+        console.error(
+          "❌ Report image error:",
+          error
+        );
+
+        return res
+          .status(500)
+          .end();
+      }
+
+      if (!data?.image) {
+        return res
+          .status(404)
+          .end();
+      }
+
+      const raw =
+        String(
+          data.image
+        );
+
+      const match =
+        raw.match(
+          /^data:([^;]+);base64,(.+)$/s
+        );
+
+      if (!match) {
+        return res
+          .status(415)
+          .end();
+      }
+
+      res.set(
+        "Cache-Control",
+        "public, max-age=86400, immutable"
+      );
+
+      res.set(
+        "Content-Type",
+        match[1]
+      );
+
+      return res.send(
+        Buffer.from(
+          match[2],
+          "base64"
+        )
+      );
+
+    } catch (error) {
+      console.error(
+        "❌ Report image server error:",
+        error
+      );
+
+      return res
+        .status(500)
+        .end();
+    }
+  }
+);
+
+/* =========================================================
+   CREATE REPORT
 ========================================================= */
 
 async function createReport(
@@ -1182,18 +1572,17 @@ async function createReport(
       });
     }
 
-    /* =====================================================
-       FIND USER
-    ===================================================== */
+    let user =
+      null;
 
-    let user = null;
-    let userError = null;
+    let userError =
+      null;
 
     const byId =
       await supabase
         .from("users")
         .select(
-          "id, name, email, points, profile_image, created_at"
+          USER_PROFILE_COLUMNS
         )
         .eq(
           "id",
@@ -1206,10 +1595,6 @@ async function createReport(
 
     userError =
       byId.error;
-
-    /* =====================================================
-       FALLBACK BY EMAIL
-    ===================================================== */
 
     if (
       !user &&
@@ -1226,7 +1611,7 @@ async function createReport(
         await supabase
           .from("users")
           .select(
-            "id, name, email, points, profile_image, created_at"
+            USER_PROFILE_COLUMNS
           )
           .eq(
             "email",
@@ -1247,11 +1632,6 @@ async function createReport(
     }
 
     if (userError) {
-      console.error(
-        "❌ Report user lookup error:",
-        userError
-      );
-
       return res.status(500).json({
         success: false,
         message:
@@ -1269,55 +1649,55 @@ async function createReport(
       });
     }
 
-    /* =====================================================
-       INSERT REPORT
-    ===================================================== */
-
     const {
       data: report,
       error: reportError,
-    } = await supabase
-      .from("reports")
-      .insert([
-        {
-          user_id:
-            user.id,
+    } =
+      await supabase
+        .from("reports")
+        .insert([
+          {
+            user_id:
+              user.id,
 
-          type,
+            type:
+              type,
 
-          item_name:
-            cleanItemName,
+            item_name:
+              cleanItemName,
 
-          description:
-            cleanDescription,
+            description:
+              cleanDescription,
 
-          location:
-            cleanLocation,
+            location:
+              cleanLocation,
 
-          date_lost:
-            date,
+            date_lost:
+              date,
 
-          time_lost:
-            time || null,
+            time_lost:
+              time || null,
 
-          phone:
-            cleanPhone,
+            phone:
+              cleanPhone,
 
-          image:
-            image || null,
+            image:
+              image || null,
 
-          status:
-            "active",
+            status:
+              "active",
 
-          reported_by:
-            user.email,
+            reported_by:
+              user.email,
 
-          reporter_name:
-            user.name,
-        },
-      ])
-      .select("*")
-      .single();
+            reporter_name:
+              user.name,
+          },
+        ])
+        .select(
+          REPORT_COLUMNS
+        )
+        .single();
 
     if (reportError) {
       console.error(
@@ -1334,42 +1714,31 @@ async function createReport(
       });
     }
 
-    /* =====================================================
-       +10 POINTS
-    ===================================================== */
-
-    const currentPoints =
+    const newPoints =
       Number(
         user.points || 0
-      );
-
-    const newPoints =
-      currentPoints + 10;
+      ) + 10;
 
     const {
       data: updatedUser,
       error: pointsError,
-    } = await supabase
-      .from("users")
-      .update({
-        points:
-          newPoints,
-      })
-      .eq(
-        "id",
-        user.id
-      )
-      .select(
-        "id, name, email, points, profile_image, created_at"
-      )
-      .single();
+    } =
+      await supabase
+        .from("users")
+        .update({
+          points:
+            newPoints,
+        })
+        .eq(
+          "id",
+          user.id
+        )
+        .select(
+          USER_PROFILE_COLUMNS
+        )
+        .single();
 
     if (pointsError) {
-      console.error(
-        "❌ Points update error:",
-        pointsError
-      );
-
       return res.status(500).json({
         success: false,
         message:
@@ -1391,7 +1760,8 @@ async function createReport(
 
       report: {
         ...mapReport(
-          report
+          report,
+          false
         ),
 
         points:
@@ -1400,15 +1770,12 @@ async function createReport(
 
       user:
         mapUser(
-          updatedUser
+          updatedUser,
+          false
         ),
     });
-  } catch (error) {
-    console.error(
-      `❌ ${type} report server error:`,
-      error
-    );
 
+  } catch (error) {
     return res.status(500).json({
       success: false,
       message:
@@ -1418,6 +1785,10 @@ async function createReport(
     });
   }
 }
+
+/* =========================================================
+   REPORT ROUTES
+========================================================= */
 
 app.post(
   "/api/reports/lost",
@@ -1440,16 +1811,15 @@ app.post(
 );
 
 /* =========================================================
-   CLAIM / RESOLVE REPORT
+   CLAIM / RESOLVE
 ========================================================= */
 
 app.patch(
   "/api/reports/:id/claim",
   async (req, res) => {
     try {
-      const {
-        id,
-      } = req.params;
+      const { id } =
+        req.params;
 
       const {
         userId,
@@ -1476,28 +1846,32 @@ app.patch(
         });
       }
 
+      /*
+        One report only.
+        select("*") is acceptable here because this
+        is a single record, not the entire report list.
+      */
+
       const {
         data: report,
         error: reportError,
-      } = await supabase
-        .from("reports")
-        .select("*")
-        .eq(
-          "id",
-          id
-        )
-        .maybeSingle();
+      } =
+        await supabase
+          .from("reports")
+          .select("*")
+          .eq(
+            "id",
+            id
+          )
+          .maybeSingle();
 
       if (reportError) {
-        console.error(
-          "❌ Claim lookup error:",
-          reportError
-        );
-
         return res.status(500).json({
           success: false,
           message:
             "Unable to find this report.",
+          error:
+            reportError.message,
         });
       }
 
@@ -1523,15 +1897,15 @@ app.patch(
       }
 
       const reporterEmail =
-        (
+        String(
           report.reported_by ||
-          ""
+            ""
         )
           .trim()
           .toLowerCase();
 
       const claimerEmail =
-        (
+        String(
           userEmail || ""
         )
           .trim()
@@ -1556,35 +1930,31 @@ app.patch(
       const {
         data: updatedReport,
         error: updateError,
-      } = await supabase
-        .from("reports")
-        .update({
-          status:
-            "resolved",
+      } =
+        await supabase
+          .from("reports")
+          .update({
+            status:
+              "resolved",
 
-          claimed_by:
-            userEmail || "",
+            claimed_by:
+              userEmail || "",
 
-          claimed_by_name:
-            userName ||
-            "Foundly Member",
+            claimed_by_name:
+              userName ||
+              "Foundly Member",
 
-          resolved_at:
-            resolvedAt,
-        })
-        .eq(
-          "id",
-          id
-        )
-        .select("*")
-        .single();
+            resolved_at:
+              resolvedAt,
+          })
+          .eq(
+            "id",
+            id
+          )
+          .select("*")
+          .single();
 
       if (updateError) {
-        console.error(
-          "❌ Claim update error:",
-          updateError
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -1602,26 +1972,25 @@ app.patch(
 
         report:
           mapReport(
-            updatedReport
+            updatedReport,
+            false
           ),
       });
-    } catch (error) {
-      console.error(
-        "❌ Claim server error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while claiming this report.",
+        error:
+          error.message,
       });
     }
   }
 );
 
 /* =========================================================
-   FEEDBACK - GET
+   FEEDBACK GET
 ========================================================= */
 
 app.get(
@@ -1631,22 +2000,18 @@ app.get(
       const {
         data,
         error,
-      } = await supabase
-        .from("feedback")
-        .select("*")
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        );
+      } =
+        await supabase
+          .from("feedback")
+          .select("*")
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          );
 
       if (error) {
-        console.error(
-          "❌ Get feedback error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -1660,27 +2025,26 @@ app.get(
         success: true,
 
         feedback:
-          (data || []).map(
-            mapFeedback
-          ),
+          (data || [])
+            .map(
+              mapFeedback
+            ),
       });
-    } catch (error) {
-      console.error(
-        "❌ Feedback server error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while loading feedback.",
+        error:
+          error.message,
       });
     }
   }
 );
 
 /* =========================================================
-   FEEDBACK - POST
+   FEEDBACK POST
 ========================================================= */
 
 app.post(
@@ -1769,38 +2133,35 @@ app.post(
       const {
         data,
         error,
-      } = await supabase
-        .from("feedback")
-        .insert([
-          {
-            user_id:
-              userId || null,
+      } =
+        await supabase
+          .from("feedback")
+          .insert([
+            {
+              user_id:
+                userId ||
+                null,
 
-            name:
-              cleanName,
+              name:
+                cleanName,
 
-            email:
-              cleanEmail,
+              email:
+                cleanEmail,
 
-            rating:
-              numericRating,
+              rating:
+                numericRating,
 
-            category:
-              cleanCategory,
+              category:
+                cleanCategory,
 
-            comment:
-              cleanComment,
-          },
-        ])
-        .select("*")
-        .single();
+              comment:
+                cleanComment,
+            },
+          ])
+          .select("*")
+          .single();
 
       if (error) {
-        console.error(
-          "❌ Save feedback error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -1821,32 +2182,29 @@ app.post(
             data
           ),
       });
-    } catch (error) {
-      console.error(
-        "❌ Feedback POST error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while submitting feedback.",
+        error:
+          error.message,
       });
     }
   }
 );
 
 /* =========================================================
-   FEEDBACK - DELETE
+   FEEDBACK DELETE
 ========================================================= */
 
 app.delete(
   "/api/feedback/:id",
   async (req, res) => {
     try {
-      const {
-        id,
-      } = req.params;
+      const { id } =
+        req.params;
 
       if (!id) {
         return res.status(400).json({
@@ -1858,20 +2216,16 @@ app.delete(
 
       const {
         error,
-      } = await supabase
-        .from("feedback")
-        .delete()
-        .eq(
-          "id",
-          id
-        );
+      } =
+        await supabase
+          .from("feedback")
+          .delete()
+          .eq(
+            "id",
+            id
+          );
 
       if (error) {
-        console.error(
-          "❌ Delete feedback error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -1886,24 +2240,21 @@ app.delete(
         message:
           "Feedback deleted successfully.",
       });
-    } catch (error) {
-      console.error(
-        "❌ Feedback DELETE error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while deleting feedback.",
+        error:
+          error.message,
       });
     }
   }
 );
 
 /* =========================================================
-   MESSAGES - GET ALL
-   Must come before /:userId
+   MESSAGES GET ALL
 ========================================================= */
 
 app.get(
@@ -1913,22 +2264,18 @@ app.get(
       const {
         data,
         error,
-      } = await supabase
-        .from("messages")
-        .select("*")
-        .order(
-          "created_at",
-          {
-            ascending: true,
-          }
-        );
+      } =
+        await supabase
+          .from("messages")
+          .select("*")
+          .order(
+            "created_at",
+            {
+              ascending: true,
+            }
+          );
 
       if (error) {
-        console.error(
-          "❌ Get all messages error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -1942,36 +2289,34 @@ app.get(
         success: true,
 
         messages:
-          (data || []).map(
-            mapMessage
-          ),
+          (data || [])
+            .map(
+              mapMessage
+            ),
       });
-    } catch (error) {
-      console.error(
-        "❌ Messages server error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while loading messages.",
+        error:
+          error.message,
       });
     }
   }
 );
 
 /* =========================================================
-   MESSAGES - GET USER MESSAGES
+   MESSAGES BY USER
 ========================================================= */
 
 app.get(
   "/api/messages/:userId",
   async (req, res) => {
     try {
-      const {
-        userId,
-      } = req.params;
+      const { userId } =
+        req.params;
 
       if (!userId) {
         return res.status(400).json({
@@ -1984,25 +2329,21 @@ app.get(
       const {
         data,
         error,
-      } = await supabase
-        .from("messages")
-        .select("*")
-        .or(
-          `sender_id.eq.${userId},receiver_id.eq.${userId}`
-        )
-        .order(
-          "created_at",
-          {
-            ascending: true,
-          }
-        );
+      } =
+        await supabase
+          .from("messages")
+          .select("*")
+          .or(
+            `sender_id.eq.${userId},receiver_id.eq.${userId}`
+          )
+          .order(
+            "created_at",
+            {
+              ascending: true,
+            }
+          );
 
       if (error) {
-        console.error(
-          "❌ Get user messages error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -2016,27 +2357,26 @@ app.get(
         success: true,
 
         messages:
-          (data || []).map(
-            mapMessage
-          ),
+          (data || [])
+            .map(
+              mapMessage
+            ),
       });
-    } catch (error) {
-      console.error(
-        "❌ User messages error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while loading your messages.",
+        error:
+          error.message,
       });
     }
   }
 );
 
 /* =========================================================
-   MESSAGES - SEND
+   SEND MESSAGE
 ========================================================= */
 
 app.post(
@@ -2092,46 +2432,43 @@ app.post(
       const {
         data,
         error,
-      } = await supabase
-        .from("messages")
-        .insert([
-          {
-            report_id:
-              reportId || null,
+      } =
+        await supabase
+          .from("messages")
+          .insert([
+            {
+              report_id:
+                reportId ||
+                null,
 
-            sender_id:
-              senderId,
+              sender_id:
+                senderId,
 
-            receiver_id:
-              receiverId,
+              receiver_id:
+                receiverId,
 
-            sender_email:
-              senderEmail,
+              sender_email:
+                senderEmail,
 
-            sender_name:
-              senderName ||
-              "Foundly Member",
+              sender_name:
+                senderName ||
+                "Foundly Member",
 
-            receiver_email:
-              receiverEmail,
+              receiver_email:
+                receiverEmail,
 
-            receiver_name:
-              receiverName ||
-              "Foundly Member",
+              receiver_name:
+                receiverName ||
+                "Foundly Member",
 
-            message:
-              cleanMessage,
-          },
-        ])
-        .select("*")
-        .single();
+              message:
+                cleanMessage,
+            },
+          ])
+          .select("*")
+          .single();
 
       if (error) {
-        console.error(
-          "❌ Send message error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -2152,27 +2489,30 @@ app.post(
             data
           ),
       });
-    } catch (error) {
-      console.error(
-        "❌ Message POST error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while sending message.",
+        error:
+          error.message,
       });
     }
   }
 );
 
 /* =========================================================
-   NOTIFICATIONS - SYNC
+   NOTIFICATIONS SYNC
 ========================================================= */
 
 async function syncNotifications() {
   try {
+    /*
+      IMPORTANT:
+      No report images are fetched here.
+    */
+
     const [
       reportsResult,
       usersResult,
@@ -2181,7 +2521,9 @@ async function syncNotifications() {
     ] = await Promise.all([
       supabase
         .from("reports")
-        .select("*")
+        .select(
+          "id, user_id, type, item_name, status, resolved_at, created_at"
+        )
         .order(
           "created_at",
           {
@@ -2203,7 +2545,9 @@ async function syncNotifications() {
 
       supabase
         .from("feedback")
-        .select("*")
+        .select(
+          "id, rating, created_at"
+        )
         .order(
           "created_at",
           {
@@ -2213,7 +2557,9 @@ async function syncNotifications() {
 
       supabase
         .from("messages")
-        .select("*")
+        .select(
+          "id, sender_name, receiver_id, created_at"
+        )
         .order(
           "created_at",
           {
@@ -2222,50 +2568,27 @@ async function syncNotifications() {
         ),
     ]);
 
-    if (reportsResult.error) {
-      console.error(
-        "❌ Notification reports error:",
-        reportsResult.error
-      );
-    }
-
-    if (usersResult.error) {
-      console.error(
-        "❌ Notification users error:",
-        usersResult.error
-      );
-    }
-
-    if (feedbackResult.error) {
-      console.error(
-        "❌ Notification feedback error:",
-        feedbackResult.error
-      );
-    }
-
-    if (messagesResult.error) {
-      console.error(
-        "❌ Notification messages error:",
-        messagesResult.error
-      );
-    }
-
     const reports =
-      reportsResult.data || [];
+      reportsResult.data ||
+      [];
 
     const users =
-      usersResult.data || [];
+      usersResult.data ||
+      [];
 
     const feedback =
-      feedbackResult.data || [];
+      feedbackResult.data ||
+      [];
 
     const messages =
-      messagesResult.data || [];
+      messagesResult.data ||
+      [];
 
-    const notifications = [];
+    const notifications =
+      [];
 
     /* =====================================================
-       ADMIN - NEW REPORT
+       REPORT NOTIFICATIONS
     ===================================================== */
 
     reports.forEach(
@@ -2305,23 +2628,13 @@ async function syncNotifications() {
           created_at:
             report.created_at,
         });
-      }
-    );
 
-    /* =====================================================
-       ADMIN - RESOLVED
-    ===================================================== */
-
-    reports
-      .filter(
-        (report) =>
+        if (
           report.status ===
             "resolved" ||
           report.status ===
             "Resolved"
-      )
-      .forEach(
-        (report) => {
+        ) {
           notifications.push({
             notification_key:
               `admin-resolved-${report.id}`,
@@ -2356,10 +2669,96 @@ async function syncNotifications() {
               report.created_at,
           });
         }
-      );
+
+        if (
+          report.user_id
+        ) {
+          notifications.push({
+            notification_key:
+              `student-report-${report.id}`,
+
+            recipient_role:
+              "student",
+
+            recipient_id:
+              report.user_id,
+
+            type:
+              "report",
+
+            title:
+              report.type ===
+              "found"
+                ? "Found Report Submitted"
+                : "Lost Report Submitted",
+
+            description:
+              `${
+                report.item_name ||
+                "Your item"
+              } was successfully reported.`,
+
+            source_id:
+              report.id,
+
+            section:
+              "reports",
+
+            read:
+              false,
+
+            created_at:
+              report.created_at,
+          });
+
+          if (
+            report.status ===
+              "resolved" ||
+            report.status ===
+              "Resolved"
+          ) {
+            notifications.push({
+              notification_key:
+                `student-resolved-${report.id}`,
+
+              recipient_role:
+                "student",
+
+              recipient_id:
+                report.user_id,
+
+              type:
+                "resolved",
+
+              title:
+                "Item Reunited",
+
+              description:
+                `${
+                  report.item_name ||
+                  "Your item"
+                } has been successfully claimed.`,
+
+              source_id:
+                report.id,
+
+              section:
+                "reports",
+
+              read:
+                false,
+
+              created_at:
+                report.resolved_at ||
+                report.created_at,
+            });
+          }
+        }
+      }
+    );
 
     /* =====================================================
-       ADMIN - NEW USER
+       USER NOTIFICATIONS
     ===================================================== */
 
     users.forEach(
@@ -2381,7 +2780,10 @@ async function syncNotifications() {
             "New User",
 
           description:
-            `${user.name || "A new user"} joined Foundly.`,
+            `${
+              user.name ||
+              "A new user"
+            } joined Foundly.`,
 
           source_id:
             user.id,
@@ -2399,7 +2801,7 @@ async function syncNotifications() {
     );
 
     /* =====================================================
-       ADMIN - NEW FEEDBACK
+       FEEDBACK NOTIFICATIONS
     ===================================================== */
 
     feedback.forEach(
@@ -2421,7 +2823,10 @@ async function syncNotifications() {
             "New Feedback",
 
           description:
-            `${item.rating || 0}/5 rating submitted.`,
+            `${
+              item.rating ||
+              0
+            }/5 rating submitted.`,
 
           source_id:
             item.id,
@@ -2439,7 +2844,7 @@ async function syncNotifications() {
     );
 
     /* =====================================================
-       ADMIN - NEW MESSAGE
+       MESSAGE NOTIFICATIONS
     ===================================================== */
 
     messages.forEach(
@@ -2461,7 +2866,10 @@ async function syncNotifications() {
             "New Message",
 
           description:
-            `${item.sender_name || "A user"} sent a message.`,
+            `${
+              item.sender_name ||
+              "A user"
+            } sent a message.`,
 
           source_id:
             item.id,
@@ -2475,144 +2883,45 @@ async function syncNotifications() {
           created_at:
             item.created_at,
         });
-      }
-    );
 
-    /* =====================================================
-       STUDENT - REPORT SUBMITTED
-    ===================================================== */
-
-    reports.forEach(
-      (report) => {
-        if (!report.user_id) return;
-
-        notifications.push({
-          notification_key:
-            `student-report-${report.id}`,
-
-          recipient_role:
-            "student",
-
-          recipient_id:
-            report.user_id,
-
-          type:
-            "report",
-
-          title:
-            report.type ===
-            "found"
-              ? "Found Report Submitted"
-              : "Lost Report Submitted",
-
-          description:
-            `${report.item_name || "Your item"} was successfully reported.`,
-
-          source_id:
-            report.id,
-
-          section:
-            "reports",
-
-          read:
-            false,
-
-          created_at:
-            report.created_at,
-        });
-      }
-    );
-
-    /* =====================================================
-       STUDENT - REPORT RESOLVED
-    ===================================================== */
-
-    reports
-      .filter(
-        (report) =>
-          report.status ===
-            "resolved" ||
-          report.status ===
-            "Resolved"
-      )
-      .forEach(
-        (report) => {
-          if (!report.user_id) return;
-
+        if (
+          item.receiver_id
+        ) {
           notifications.push({
             notification_key:
-              `student-resolved-${report.id}`,
+              `student-message-${item.id}`,
 
             recipient_role:
               "student",
 
             recipient_id:
-              report.user_id,
+              item.receiver_id,
 
             type:
-              "resolved",
+              "message",
 
             title:
-              "Item Reunited",
+              "New Message",
 
             description:
-              `${report.item_name || "Your item"} has been successfully claimed.`,
+              `${
+                item.sender_name ||
+                "A Foundly Member"
+              } sent you a message.`,
 
             source_id:
-              report.id,
+              item.id,
 
             section:
-              "reports",
+              "messages",
 
             read:
               false,
 
             created_at:
-              report.resolved_at ||
-              report.created_at,
+              item.created_at,
           });
         }
-      );
-
-    /* =====================================================
-       STUDENT - MESSAGE RECEIVED
-    ===================================================== */
-
-    messages.forEach(
-      (item) => {
-        if (!item.receiver_id) return;
-
-        notifications.push({
-          notification_key:
-            `student-message-${item.id}`,
-
-          recipient_role:
-            "student",
-
-          recipient_id:
-            item.receiver_id,
-
-          type:
-            "message",
-
-          title:
-            "New Message",
-
-          description:
-            `${item.sender_name || "A Foundly Member"} sent you a message.`,
-
-          source_id:
-            item.id,
-
-          section:
-            "messages",
-
-          read:
-            false,
-
-          created_at:
-            item.created_at,
-        });
       }
     );
 
@@ -2625,18 +2934,19 @@ async function syncNotifications() {
 
     const {
       error,
-    } = await supabase
-      .from("notifications")
-      .upsert(
-        notifications,
-        {
-          onConflict:
-            "notification_key",
+    } =
+      await supabase
+        .from("notifications")
+        .upsert(
+          notifications,
+          {
+            onConflict:
+              "notification_key",
 
-          ignoreDuplicates:
-            true,
-        }
-      );
+            ignoreDuplicates:
+              true,
+          }
+        );
 
     if (error) {
       console.error(
@@ -2644,6 +2954,7 @@ async function syncNotifications() {
         error
       );
     }
+
   } catch (error) {
     console.error(
       "❌ Notification sync failed:",
@@ -2667,15 +2978,18 @@ app.get(
 
       await syncNotifications();
 
-      let query = supabase
-        .from("notifications")
-        .select("*")
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        );
+      let query =
+        supabase
+          .from(
+            "notifications"
+          )
+          .select("*")
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          );
 
       if (
         role ===
@@ -2699,6 +3013,7 @@ app.get(
               "recipient_id",
               userId
             );
+
       } else if (
         role ===
         "admin"
@@ -2713,14 +3028,10 @@ app.get(
       const {
         data,
         error,
-      } = await query;
+      } =
+        await query;
 
       if (error) {
-        console.error(
-          "❌ Get notifications error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -2735,16 +3046,14 @@ app.get(
         notifications:
           data || [],
       });
-    } catch (error) {
-      console.error(
-        "❌ Notifications server error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while loading notifications.",
+        error:
+          error.message,
       });
     }
   }
@@ -2758,9 +3067,8 @@ app.patch(
   "/api/notifications/:id/read",
   async (req, res) => {
     try {
-      const {
-        id,
-      } = req.params;
+      const { id } =
+        req.params;
 
       if (!id) {
         return res.status(400).json({
@@ -2773,25 +3081,23 @@ app.patch(
       const {
         data,
         error,
-      } = await supabase
-        .from("notifications")
-        .update({
-          read:
-            true,
-        })
-        .eq(
-          "id",
-          id
-        )
-        .select("*")
-        .single();
+      } =
+        await supabase
+          .from(
+            "notifications"
+          )
+          .update({
+            read:
+              true,
+          })
+          .eq(
+            "id",
+            id
+          )
+          .select("*")
+          .single();
 
       if (error) {
-        console.error(
-          "❌ Mark notification read error:",
-          error
-        );
-
         return res.status(500).json({
           success: false,
           message:
@@ -2806,16 +3112,14 @@ app.patch(
         notification:
           data,
       });
-    } catch (error) {
-      console.error(
-        "❌ Notification read error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while updating notification.",
+        error:
+          error.message,
       });
     }
   }
@@ -2848,27 +3152,25 @@ app.patch(
 
         const {
           error,
-        } = await supabase
-          .from("notifications")
-          .update({
-            read:
-              true,
-          })
-          .eq(
-            "recipient_role",
-            "student"
-          )
-          .eq(
-            "recipient_id",
-            userId
-          );
+        } =
+          await supabase
+            .from(
+              "notifications"
+            )
+            .update({
+              read:
+                true,
+            })
+            .eq(
+              "recipient_role",
+              "student"
+            )
+            .eq(
+              "recipient_id",
+              userId
+            );
 
         if (error) {
-          console.error(
-            "❌ Student read-all error:",
-            error
-          );
-
           return res.status(500).json({
             success: false,
             message:
@@ -2877,29 +3179,28 @@ app.patch(
               error.message,
           });
         }
+
       } else if (
         role ===
         "admin"
       ) {
         const {
           error,
-        } = await supabase
-          .from("notifications")
-          .update({
-            read:
-              true,
-          })
-          .eq(
-            "recipient_role",
-            "admin"
-          );
+        } =
+          await supabase
+            .from(
+              "notifications"
+            )
+            .update({
+              read:
+                true,
+            })
+            .eq(
+              "recipient_role",
+              "admin"
+            );
 
         if (error) {
-          console.error(
-            "❌ Admin read-all error:",
-            error
-          );
-
           return res.status(500).json({
             success: false,
             message:
@@ -2908,6 +3209,7 @@ app.patch(
               error.message,
           });
         }
+
       } else {
         return res.status(400).json({
           success: false,
@@ -2921,16 +3223,14 @@ app.patch(
         message:
           "All notifications marked as read.",
       });
-    } catch (error) {
-      console.error(
-        "❌ Read-all notification error:",
-        error
-      );
 
+    } catch (error) {
       return res.status(500).json({
         success: false,
         message:
           "Something went wrong while updating notifications.",
+        error:
+          error.message,
       });
     }
   }
