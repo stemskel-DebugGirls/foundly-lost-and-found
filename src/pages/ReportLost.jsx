@@ -32,10 +32,160 @@ function ReportLost({ onBack, onSuccess }) {
   const [submitting, setSubmitting] = useState(false);
 
   /* =====================================================
-     IMAGE
-  ===================================================== */
+     IMAGE COMPRESSION
+     ===================================================== */
 
-  const handleImageChange = (e) => {
+  const compressImage = (
+    file,
+    maxWidth = 1280,
+    maxHeight = 1280,
+    maxBytes = 500 * 1024
+  ) => {
+    return new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          let width = img.naturalWidth;
+          let height = img.naturalHeight;
+
+          const initialScale = Math.min(
+            1,
+            maxWidth / width,
+            maxHeight / height
+          );
+
+          width = Math.max(1, Math.round(width * initialScale));
+          height = Math.max(1, Math.round(height * initialScale));
+
+          let result = "";
+          let quality = 0.78;
+
+          /*
+            Keep reducing quality first.
+            Then reduce dimensions until the estimated binary
+            JPEG size is safely at or below 500 KB.
+          */
+          for (let attempt = 0; attempt < 30; attempt += 1) {
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext("2d");
+
+            if (!ctx) {
+              URL.revokeObjectURL(objectUrl);
+              reject(new Error("Unable to process this image."));
+              return;
+            }
+
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.drawImage(img, 0, 0, width, height);
+
+            result = canvas.toDataURL("image/jpeg", quality);
+
+            const estimatedBytes = Math.floor(result.length * 0.75);
+
+            if (estimatedBytes <= maxBytes) {
+              URL.revokeObjectURL(objectUrl);
+              resolve(result);
+              return;
+            }
+
+            /*
+              Lower quality first.
+            */
+            if (quality > 0.38) {
+              quality -= 0.06;
+              continue;
+            }
+
+            /*
+              Quality is already low enough.
+              Shrink dimensions and restart with a reasonable quality.
+            */
+            width = Math.max(320, Math.round(width * 0.82));
+            height = Math.max(240, Math.round(height * 0.82));
+            quality = 0.68;
+          }
+
+          /*
+            Final safety loop.
+            Keep shrinking until the hard target is reached.
+          */
+          while (true) {
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext("2d");
+
+            if (!ctx) {
+              URL.revokeObjectURL(objectUrl);
+              reject(new Error("Unable to process this image."));
+              return;
+            }
+
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+
+            result = canvas.toDataURL("image/jpeg", 0.5);
+
+            const estimatedBytes = Math.floor(result.length * 0.75);
+
+            if (estimatedBytes <= maxBytes) {
+              URL.revokeObjectURL(objectUrl);
+              resolve(result);
+              return;
+            }
+
+            const nextWidth = Math.max(240, Math.floor(width * 0.82));
+            const nextHeight = Math.max(180, Math.floor(height * 0.82));
+
+            if (
+              nextWidth === width &&
+              nextHeight === height
+            ) {
+              URL.revokeObjectURL(objectUrl);
+              reject(
+                new Error(
+                  "Unable to compress this image below 500 KB. Please choose another photo."
+                )
+              );
+              return;
+            }
+
+            width = nextWidth;
+            height = nextHeight;
+          }
+        } catch (compressionError) {
+          URL.revokeObjectURL(objectUrl);
+          reject(compressionError);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(
+          new Error(
+            "Unable to read this image. Please try another photo."
+          )
+        );
+      };
+
+      img.src = objectUrl;
+    });
+  };
+
+  /* =====================================================
+     IMAGE
+     ===================================================== */
+
+  const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
 
     if (!file) return;
@@ -45,32 +195,42 @@ function ReportLost({ onBack, onSuccess }) {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
+    /*
+      Allow larger phone/iPad photos.
+      The image will be compressed automatically before upload.
+    */
+    if (file.size > 15 * 1024 * 1024) {
       setError(
-        "Image is too large. Please choose an image below 5MB."
+        "Image is too large. Please choose an image below 15MB."
       );
       return;
     }
 
-    const reader = new FileReader();
+    setError("");
 
-    reader.onload = () => {
-      setImage(reader.result);
+    try {
+      const compressedImage = await compressImage(file);
+
+      setImage(compressedImage);
       setError("");
-    };
-
-    reader.onerror = () => {
-      setError(
-        "Unable to read this image. Please try another photo."
+    } catch (compressionError) {
+      console.error(
+        "Image compression error:",
+        compressionError
       );
-    };
 
-    reader.readAsDataURL(file);
+      setImage(null);
+
+      setError(
+        compressionError?.message ||
+          "Unable to process this image. Please try another photo."
+      );
+    }
   };
 
   /* =====================================================
      REMOVE IMAGE
-  ===================================================== */
+     ===================================================== */
 
   const removeImage = () => {
     setImage(null);
@@ -78,7 +238,7 @@ function ReportLost({ onBack, onSuccess }) {
 
   /* =====================================================
      GET CURRENT USER
-  ===================================================== */
+     ===================================================== */
 
   const getCurrentUser = () => {
     try {
@@ -99,7 +259,7 @@ function ReportLost({ onBack, onSuccess }) {
 
   /* =====================================================
      UPDATE LOCAL USER CACHE
-  ===================================================== */
+     ===================================================== */
 
   const updateLocalUserCache = (updatedCurrentUser) => {
     try {
@@ -153,7 +313,7 @@ function ReportLost({ onBack, onSuccess }) {
 
   /* =====================================================
      SAVE LOCAL REPORT CACHE
-  ===================================================== */
+     ===================================================== */
 
   const saveLocalReport = (newReport) => {
     try {
@@ -192,7 +352,7 @@ function ReportLost({ onBack, onSuccess }) {
 
   /* =====================================================
      SUBMIT
-  ===================================================== */
+     ===================================================== */
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -547,7 +707,7 @@ function ReportLost({ onBack, onSuccess }) {
 
   /* =====================================================
      UI
-  ===================================================== */
+     ===================================================== */
 
   return (
     <div className="report-lost-page">
@@ -751,7 +911,7 @@ function ReportLost({ onBack, onSuccess }) {
                 </strong>
 
                 <span>
-                  PNG, JPG or JPEG · Max 5MB
+                  PNG, JPG or JPEG · Max 15MB
                 </span>
 
                 <input

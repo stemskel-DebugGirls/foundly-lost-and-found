@@ -42,8 +42,7 @@ function ReportFound({
     file,
     maxWidth = 1280,
     maxHeight = 1280,
-    quality = 0.72,
-    maxBytes = 1500 * 1024
+    maxBytes = 500 * 1024
   ) => {
     return new Promise((resolve, reject) => {
       const objectUrl = URL.createObjectURL(file);
@@ -55,111 +54,96 @@ function ReportFound({
           let height = img.naturalHeight;
 
           /* Keep original aspect ratio */
-          const scale = Math.min(
+          const initialScale = Math.min(
             1,
             maxWidth / width,
             maxHeight / height
           );
 
-          width = Math.round(width * scale);
-          height = Math.round(height * scale);
+          width = Math.max(1, Math.round(width * initialScale));
+          height = Math.max(1, Math.round(height * initialScale));
 
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
+          let result = '';
+          let currentQuality = 0.78;
 
-          const ctx = canvas.getContext("2d");
+          /*
+            Keep reducing JPEG quality first.
+            Then reduce dimensions as a second safety step.
+            This guarantees we do not intentionally send a multi-MB image.
+          */
+          for (let attempt = 0; attempt < 8; attempt += 1) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
 
-          if (!ctx) {
+            const ctx = canvas.getContext('2d');
+
+            if (!ctx) {
+              URL.revokeObjectURL(objectUrl);
+              reject(new Error('Unable to process this image.'));
+              return;
+            }
+
+            /* White background avoids transparent/black areas */
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.drawImage(img, 0, 0, width, height);
+
+            result = canvas.toDataURL('image/jpeg', currentQuality);
+
+            /* Base64 is about 4/3 the binary size; use decoded-size estimate. */
+            const estimatedBytes = Math.floor(result.length * 0.75);
+
+            if (estimatedBytes <= maxBytes) {
+              URL.revokeObjectURL(objectUrl);
+              resolve(result);
+              return;
+            }
+
+            if (currentQuality > 0.32) {
+              currentQuality -= 0.08;
+              continue;
+            }
+
+            /* Quality is already low enough; shrink dimensions and retry. */
+            width = Math.max(640, Math.round(width * 0.78));
+            height = Math.max(480, Math.round(height * 0.78));
+            currentQuality = 0.68;
+          }
+
+          /* Final fallback: smaller image + lower quality */
+          const fallbackCanvas = document.createElement('canvas');
+          fallbackCanvas.width = Math.max(480, Math.round(width * 0.7));
+          fallbackCanvas.height = Math.max(360, Math.round(height * 0.7));
+
+          const fallbackCtx = fallbackCanvas.getContext('2d');
+
+          if (!fallbackCtx) {
             URL.revokeObjectURL(objectUrl);
-            reject(
-              new Error("Unable to process this image.")
-            );
+            reject(new Error('Unable to process this image.'));
             return;
           }
 
-          /* White background avoids black/transparent areas */
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, width, height);
+          fallbackCtx.fillStyle = '#ffffff';
+          fallbackCtx.fillRect(
+            0,
+            0,
+            fallbackCanvas.width,
+            fallbackCanvas.height
+          );
 
-          ctx.drawImage(
+          fallbackCtx.drawImage(
             img,
             0,
             0,
-            width,
-            height
+            fallbackCanvas.width,
+            fallbackCanvas.height
           );
 
-          /*
-            Start with quality 0.72.
-            If the result is still too large,
-            gradually reduce quality.
-          */
-          let currentQuality = quality;
-          let result = canvas.toDataURL(
-            "image/jpeg",
-            currentQuality
-          );
-
-          while (
-            result.length * 0.75 > maxBytes &&
-            currentQuality > 0.42
-          ) {
-            currentQuality -= 0.08;
-
-            result = canvas.toDataURL(
-              "image/jpeg",
-              currentQuality
-            );
-          }
-
-          /*
-            If it is still too large, resize once more.
-          */
-          if (
-            result.length * 0.75 > maxBytes &&
-            width > 900
-          ) {
-            const resizeRatio = 900 / width;
-
-            const smallerCanvas =
-              document.createElement("canvas");
-
-            smallerCanvas.width = 900;
-            smallerCanvas.height = Math.round(
-              height * resizeRatio
-            );
-
-            const smallerCtx =
-              smallerCanvas.getContext("2d");
-
-            if (smallerCtx) {
-              smallerCtx.fillStyle = "#ffffff";
-              smallerCtx.fillRect(
-                0,
-                0,
-                smallerCanvas.width,
-                smallerCanvas.height
-              );
-
-              smallerCtx.drawImage(
-                img,
-                0,
-                0,
-                smallerCanvas.width,
-                smallerCanvas.height
-              );
-
-              result =
-                smallerCanvas.toDataURL(
-                  "image/jpeg",
-                  0.62
-                );
-            }
-          }
+          result = fallbackCanvas.toDataURL('image/jpeg', 0.5);
 
           URL.revokeObjectURL(objectUrl);
-
           resolve(result);
         } catch (compressionError) {
           URL.revokeObjectURL(objectUrl);
@@ -171,7 +155,7 @@ function ReportFound({
         URL.revokeObjectURL(objectUrl);
         reject(
           new Error(
-            "Unable to read this image. Please try another photo."
+            'Unable to read this image. Please try another photo.'
           )
         );
       };
@@ -928,7 +912,7 @@ function ReportFound({
                 </span>
 
                 <small>
-                  Image will be automatically compressed for faster upload.
+                  Image will be automatically compressed to about 500 KB or less for faster upload.
                 </small>
 
                 <input
