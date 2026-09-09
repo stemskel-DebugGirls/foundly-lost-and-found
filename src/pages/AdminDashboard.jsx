@@ -391,44 +391,15 @@ function AdminDashboard({
 
   /* =====================================================
      TOTAL POINTS
+     Read directly from Supabase/API user points.
+     Do not use admin-browser localStorage overrides.
   ===================================================== */
 
-  const totalPoints =
-    schoolUsers.reduce(
-      (total, user) => {
-
-        const email =
-          user.email
-            ?.trim()
-            .toLowerCase();
-
-
-        const storedPoints =
-          email
-            ? localStorage.getItem(
-                `foundlyPoints_${email}`
-              )
-            : null;
-
-
-        const userPoints =
-          storedPoints !== null
-            ? Number(
-                storedPoints
-              ) || 0
-            : Number(
-                user.points || 0
-              );
-
-
-        return (
-          total +
-          userPoints
-        );
-
-      },
-      0
-    );
+  const totalPoints = schoolUsers.reduce(
+    (total, user) =>
+      total + Number(user.points || 0),
+    0
+  );
 
 
   /* =====================================================
