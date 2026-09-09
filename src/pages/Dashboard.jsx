@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   Bell,
+  ShieldCheck,
   Trophy,
   Heart,
   Sparkles,
@@ -2203,6 +2204,230 @@ useEffect(() => {
             </div>
           </div>
         )}
+
+        /* =================================================
+   SETTINGS
+================================================= */
+
+{activeMenu === "settings" && (
+  <section className="student-settings-section">
+
+    <div className="settings-page-heading">
+      <div>
+        <span>
+          YOUR FOUNDLY SPACE
+        </span>
+
+        <h2>
+          Settings
+        </h2>
+
+        <p>
+          Manage your account preferences
+          and notification settings.
+        </p>
+      </div>
+
+      <div className="settings-heading-icon">
+        <Settings size={32} />
+      </div>
+    </div>
+
+
+    <div className="settings-card-grid">
+
+      {/* NOTIFICATIONS */}
+
+      <div className="student-settings-card">
+
+        <div className="settings-card-icon pink">
+          <Bell size={22} />
+        </div>
+
+        <div className="settings-card-content">
+
+          <strong>
+            Notifications
+          </strong>
+
+          <span>
+            Allow Foundly to show notification
+            updates for your account.
+          </span>
+
+        </div>
+
+
+        <button
+          type="button"
+          className={
+            notificationsEnabled
+              ? "settings-toggle active"
+              : "settings-toggle"
+          }
+          aria-pressed={
+            notificationsEnabled
+          }
+          onClick={() => {
+
+            const next =
+              !notificationsEnabled;
+
+            setNotificationsEnabled(
+              next
+            );
+
+            localStorage.setItem(
+              "foundlyNotificationsEnabled",
+              String(next)
+            );
+
+            setNotificationCount(
+              next
+                ? studentNotifications.filter(
+                    (item) =>
+                      !item.read
+                  ).length
+                : 0
+            );
+
+          }}
+        >
+          <span />
+        </button>
+
+      </div>
+
+
+      {/* ACCOUNT */}
+
+      <div className="student-settings-card">
+
+        <div className="settings-card-icon purple">
+          <UserRound size={22} />
+        </div>
+
+        <div className="settings-card-content">
+
+          <strong>
+            Account
+          </strong>
+
+          <span>
+            Your current Foundly account.
+          </span>
+
+          <div className="settings-account-email">
+            {
+              userEmail ||
+              "No email"
+            }
+          </div>
+
+        </div>
+
+      </div>
+
+
+      {/* SECURITY */}
+
+      <div className="student-settings-card">
+
+        <div className="settings-card-icon blue">
+          <ShieldCheck size={22} />
+        </div>
+
+        <div className="settings-card-content">
+
+          <strong>
+            Security
+          </strong>
+
+          <span>
+            Password reset and email verification
+            will be connected when Foundly moves
+            to online authentication.
+          </span>
+
+          <div className="settings-security-note">
+            Email verification planned
+          </div>
+
+        </div>
+
+      </div>
+
+
+      {/* SIGN OUT */}
+
+      <div className="student-settings-card logout-settings-card">
+
+        <div className="settings-card-icon red">
+          <LogOut size={22} />
+        </div>
+
+        <div className="settings-card-content">
+
+          <strong>
+            Sign Out
+          </strong>
+
+          <span>
+            Sign out of this Foundly account
+            on this device.
+          </span>
+
+        </div>
+
+        <button
+          type="button"
+          className="settings-logout-button"
+          onClick={() => {
+
+            const confirmed =
+              window.confirm(
+                "Are you sure you want to log out of Foundly?"
+              );
+
+            if (confirmed) {
+              onLogout();
+            }
+
+          }}
+        >
+          Logout
+        </button>
+
+      </div>
+
+    </div>
+
+
+    {/* INFO */}
+
+    <div className="settings-info-card">
+
+      <div className="settings-info-icon">
+        ✨
+      </div>
+
+      <div>
+
+        <strong>
+          Foundly Settings
+        </strong>
+
+        <span>
+          Your profile, points, reports and
+          leaderboard data remain unchanged.
+        </span>
+
+      </div>
+
+    </div>
+
+  </section>
+)}
 
         {/* =================================================
             WELCOME
