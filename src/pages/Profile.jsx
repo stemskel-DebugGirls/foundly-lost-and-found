@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 
 import "./Profile.css";
-import API_URL from "../api";
 
 function Profile({
   currentUser,
@@ -81,7 +80,7 @@ function Profile({
     const loadProfileData = async () => {
       try {
         const response = await fetch(
-          `${API_URL}/api/users`
+          "http://localhost:5000/api/users"
         );
 
         const data = await response.json();
@@ -107,24 +106,26 @@ function Profile({
               Number(serverUser.points || 0)
             );
 
-            localStorage.setItem(
-              "foundlyCurrentUser",
-              JSON.stringify({
-                ...(currentUser || {}),
-                id: serverUser.id,
-                name: serverUser.name,
-                email: serverUser.email,
-                points: Number(serverUser.points || 0),
-                profileImage:
-                  serverUser.profileImage ||
-                  serverUser.profile_image ||
-                  "",
-                profile_image:
-                  serverUser.profileImage ||
-                  serverUser.profile_image ||
-                  "",
-              })
-            );
+            saveSafeUserLocally({
+              ...(currentUser || {}),
+              id: serverUser.id,
+              name: serverUser.name,
+              email: serverUser.email,
+              points: Number(
+                serverUser.points || 0
+              ),
+              reports: totalReports,
+              created_at:
+                serverUser.created_at ||
+                currentUser?.created_at ||
+                null,
+              createdAt:
+                serverUser.createdAt ||
+                serverUser.created_at ||
+                currentUser?.createdAt ||
+                currentUser?.created_at ||
+                null,
+            });
           }
         }
       } catch (error) {
@@ -156,7 +157,7 @@ function Profile({
 
       try {
         const response = await fetch(
-          `${API_URL}/api/reports`
+          "http://localhost:5000/api/reports"
         );
 
         const data = await response.json();
@@ -235,59 +236,346 @@ function Profile({
     ).length;
 
   /* =====================================================
+     IMAGE COMPRESSION
+  ===================================================== */
+
+  const compressImage = (
+    file,
+    maxWidth = 1280,
+    maxHeight = 1280,
+    maxBytes = 500 * 1024
+  ) => {
+    return new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          let width = img.naturalWidth;
+          let height = img.naturalHeight;
+
+          const initialScale = Math.min(
+            1,
+            maxWidth / width,
+            maxHeight / height
+          );
+
+          width = Math.max(1, Math.round(width * initialScale));
+          height = Math.max(1, Math.round(height * initialScale));
+
+          let result = "";
+          let quality = 0.78;
+
+          for (let attempt = 0; attempt < 30; attempt += 1) {
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext("2d");
+
+            if (!ctx) {
+              URL.revokeObjectURL(objectUrl);
+              reject(new Error("Unable to process this image."));
+              return;
+            }
+
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+
+            result = canvas.toDataURL("image/jpeg", quality);
+
+            const estimatedBytes = Math.floor(
+              result.length * 0.75
+            );
+
+            if (estimatedBytes <= maxBytes) {
+              URL.revokeObjectURL(objectUrl);
+              resolve(result);
+              return;
+            }
+
+            if (quality > 0.38) {
+              quality -= 0.06;
+              continue;
+            }
+
+            width = Math.max(320, Math.round(width * 0.82));
+            height = Math.max(240, Math.round(height * 0.82));
+            quality = 0.68;
+          }
+
+          while (true) {
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext("2d");
+
+            if (!ctx) {
+              URL.revokeObjectURL(objectUrl);
+              reject(new Error("Unable to process this image."));
+              return;
+            }
+
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+
+            result = canvas.toDataURL("image/jpeg", 0.5);
+
+            const estimatedBytes = Math.floor(
+              result.length * 0.75
+            );
+
+            if (estimatedBytes <= maxBytes) {
+              URL.revokeObjectURL(objectUrl);
+              resolve(result);
+              return;
+            }
+
+            const nextWidth = Math.max(
+              240,
+              Math.floor(width * 0.82)
+            );
+            const nextHeight = Math.max(
+              180,
+              Math.floor(height * 0.82)
+            );
+
+            if (
+              nextWidth === width &&
+              nextHeight === height
+            ) {
+              URL.revokeObjectURL(objectUrl);
+              reject(
+                new Error(
+                  "Unable to compress this image below 500 KB. Please choose another photo."
+                )
+              );
+              return;
+            }
+
+            width = nextWidth;
+            height = nextHeight;
+          }
+        } catch (compressionError) {
+          URL.revokeObjectURL(objectUrl);
+          reject(compressionError);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(
+          new Error(
+            "Unable to read this image. Please try another photo."
+          )
+        );
+      };
+
+      img.src = objectUrl;
+    });
+  };
+
+  /* =====================================================
+     SAFE LOCAL USER
+     Never store Base64 profile image in localStorage.
+  ===================================================== */
+
+  const saveSafeUserLocally = (user) => {
+    if (!user) return;
+
+    const safeUser = {
+      id: user.id || null,
+      name:
+        user.name ||
+        user.fullName ||
+        user.username ||
+        "",
+      email: user.email || "",
+      points: Number(user.points || 0),
+      created_at: user.created_at || null,
+      createdAt:
+        user.createdAt ||
+        user.created_at ||
+        null,
+      reports: Number(user.reports || 0),
+    };
+
+    const cleanEmail = safeUser.email
+      .trim()
+      .toLowerCase();
+
+    try {
+      localStorage.setItem(
+        "foundlyCurrentUser",
+        JSON.stringify(safeUser)
+      );
+    } catch (error) {
+      console.warn(
+        "Unable to save current user locally:",
+        error
+      );
+
+      try {
+        localStorage.removeItem("foundlyCurrentUser");
+      } catch {
+        // Ignore
+      }
+    }
+
+    try {
+      if (cleanEmail) {
+        localStorage.setItem(
+          `foundlyPoints_${cleanEmail}`,
+          String(safeUser.points)
+        );
+      }
+
+      localStorage.setItem(
+        "foundlyPoints",
+        String(safeUser.points)
+      );
+    } catch (error) {
+      console.warn(
+        "Unable to save points locally:",
+        error
+      );
+    }
+
+    try {
+      let users = [];
+
+      try {
+        users = JSON.parse(
+          localStorage.getItem("foundlyUsers") || "[]"
+        );
+      } catch {
+        users = [];
+      }
+
+      if (!Array.isArray(users)) {
+        users = [];
+      }
+
+      const lightweightUsers = users
+        .filter(Boolean)
+        .map((item) => ({
+          id: item.id || null,
+          name:
+            item.name ||
+            item.fullName ||
+            item.username ||
+            "",
+          email: item.email || "",
+          points: Number(item.points || 0),
+          created_at: item.created_at || null,
+          createdAt:
+            item.createdAt ||
+            item.created_at ||
+            null,
+          reports: Number(item.reports || 0),
+        }))
+        .filter(
+          (item) =>
+            item.email
+              .trim()
+              .toLowerCase() !== cleanEmail
+        );
+
+      if (cleanEmail) {
+        lightweightUsers.push(safeUser);
+      }
+
+      localStorage.setItem(
+        "foundlyUsers",
+        JSON.stringify(lightweightUsers)
+      );
+    } catch (error) {
+      console.warn(
+        "Unable to save users locally:",
+        error
+      );
+
+      try {
+        localStorage.removeItem("foundlyUsers");
+      } catch {
+        // Ignore
+      }
+    }
+  };
+
+  /* =====================================================
+     CLEAN OLD OVERSIZED LOCAL CACHE
+  ===================================================== */
+
+  useEffect(() => {
+    saveSafeUserLocally(currentUser);
+
+    // Run once when Profile opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* =====================================================
      IMAGE UPLOAD
   ===================================================== */
 
-  const handleImageChange = (event) => {
-
-    const file =
-      event.target.files?.[0];
+  const handleImageChange = async (event) => {
+    const file = event.target.files?.[0];
 
     if (!file) {
       return;
     }
 
-    if (
-      !file.type.startsWith("image/")
-    ) {
-
-      alert(
-        "Please select an image file."
-      );
-
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
       return;
-
     }
 
-    /* Limit image size to 5MB */
-
-    if (
-      file.size > 5 * 1024 * 1024
-    ) {
-
+    /*
+      Large phone/iPad photos are allowed.
+      They are compressed before upload.
+    */
+    if (file.size > 15 * 1024 * 1024) {
       alert(
-        "Please choose an image smaller than 5MB."
+        "Please choose an image smaller than 15MB."
       );
-
       return;
-
     }
 
-    const reader =
-      new FileReader();
+    setSaved(false);
 
-    reader.onload = () => {
+    try {
+      const compressedImage =
+        await compressImage(file);
 
-      setProfileImage(
-        reader.result
+      setProfileImage(compressedImage);
+
+      /*
+        Clear any old oversized profile image
+        from localStorage immediately.
+      */
+      saveSafeUserLocally({
+        ...(currentUser || {}),
+        points,
+        reports: totalReports,
+      });
+    } catch (error) {
+      console.error(
+        "Profile image compression error:",
+        error
       );
 
-      setSaved(false);
+      setProfileImage("");
 
-    };
-
-    reader.readAsDataURL(file);
-
+      alert(
+        error?.message ||
+          "Unable to process this image. Please try another photo."
+      );
+    } finally {
+      event.target.value = "";
+    }
   };
 
   /* =====================================================
@@ -326,7 +614,7 @@ function Profile({
 
     try {
       const response = await fetch(
-        `${API_URL}/api/users/${currentUser.id}/profile`,
+        `http://localhost:5000/api/users/${currentUser.id}/profile`,
         {
           method: "PATCH",
           headers: {
@@ -371,48 +659,12 @@ function Profile({
         reports: totalReports,
       };
 
-      localStorage.setItem(
-        "foundlyCurrentUser",
-        JSON.stringify(updatedCurrentUser)
-      );
-
-      localStorage.setItem(
-        `foundlyPoints_${userEmail}`,
-        String(updatedCurrentUser.points)
-      );
-
-      localStorage.setItem(
-        "foundlyPoints",
-        String(updatedCurrentUser.points)
-      );
-
-      let users = [];
-
-      try {
-        users = JSON.parse(
-          localStorage.getItem(
-            "foundlyUsers"
-          ) || "[]"
-        );
-
-        if (!Array.isArray(users)) users = [];
-      } catch {
-        users = [];
-      }
-
-      const updatedUsers = users.map((user) =>
-        user.email?.trim().toLowerCase() ===
-        userEmail
-          ? {
-              ...user,
-              ...updatedCurrentUser,
-            }
-          : user
-      );
-
-      localStorage.setItem(
-        "foundlyUsers",
-        JSON.stringify(updatedUsers)
+      /*
+        Store only lightweight user information locally.
+        The profile image is never written to localStorage.
+      */
+      saveSafeUserLocally(
+        updatedCurrentUser
       );
 
       setName(trimmedName);
@@ -581,7 +833,7 @@ function Profile({
               <input
                 id="profile-photo-upload"
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
                 onChange={handleImageChange}
                 disabled={saving}
                 hidden
@@ -598,6 +850,8 @@ function Profile({
               <span>
                 Upload a photo so your classmates
                 can recognise you on the leaderboard.
+                Large photos are automatically compressed
+                to about 500 KB.
               </span>
 
               {profileImage && (
