@@ -2972,22 +2972,7 @@ useEffect(() => {
                   setAllReportsTab("active");
                   setShowAllReports(true);
                 }}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "5px",
-                  padding: "8px 11px",
-                  border: "1px solid rgba(255, 77, 155, 0.35)",
-                  borderRadius: "999px",
-                  background: "rgba(255, 77, 155, 0.08)",
-                  color: "#ff70b1",
-                  fontFamily: "inherit",
-                  fontSize: "9px",
-                  fontWeight: 900,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap"
-                }}
+                className="view-all-reports-inline-button"
               >
                 View All Reports
                 <ArrowRight size={13} />
@@ -3063,7 +3048,7 @@ useEffect(() => {
           </div>
 
 
-          <div className="recent-reports-grid">
+          <div className="recent-reports-grid active-grid">
 
 
             {filteredActiveReports.length === 0 ? (
@@ -3289,22 +3274,7 @@ useEffect(() => {
                   setAllReportsTab("completed");
                   setShowAllReports(true);
                 }}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "5px",
-                  padding: "7px 10px",
-                  border: "1px solid rgba(185, 120, 255, 0.35)",
-                  borderRadius: "999px",
-                  background: "rgba(185, 120, 255, 0.08)",
-                  color: "#c38aff",
-                  fontFamily: "inherit",
-                  fontSize: "8px",
-                  fontWeight: 900,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap"
-                }}
+                className="view-all-completed-inline-button"
               >
                 View All Completed
                 <ArrowRight size={12} />
