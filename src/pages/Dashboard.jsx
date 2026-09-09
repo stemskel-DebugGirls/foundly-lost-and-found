@@ -1686,6 +1686,11 @@ useEffect(() => {
               alt="SK Limbang"
             />
 
+            <div className="topbar-mobile-brand-text">
+              <strong>Foundly!</strong>
+              <span>by Debug Girls · SK Limbang</span>
+            </div>
+
           </div>
 
 
