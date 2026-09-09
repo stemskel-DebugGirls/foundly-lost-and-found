@@ -1115,6 +1115,47 @@ useEffect(() => {
      FEEDBACK DISPLAY
   ===================================================== */
 
+  const getFeedbackProfileImage = (item) => {
+    const directImage =
+      item?.profileImage ||
+      item?.profile_image ||
+      item?.avatarUrl ||
+      item?.avatar_url ||
+      item?.user?.profileImage ||
+      item?.user?.profile_image ||
+      "";
+
+    if (directImage) return directImage;
+
+    const feedbackEmail =
+      item?.email?.trim().toLowerCase() ||
+      item?.userEmail?.trim().toLowerCase() ||
+      item?.user?.email?.trim().toLowerCase() ||
+      "";
+
+    const feedbackUserId =
+      item?.userId ||
+      item?.user_id ||
+      item?.user?.id ||
+      null;
+
+    const matchedUser = registeredUsers.find((user) => {
+      const registeredEmail =
+        user?.email?.trim().toLowerCase() || "";
+
+      return (
+        (feedbackEmail && registeredEmail === feedbackEmail) ||
+        (feedbackUserId && String(user?.id) === String(feedbackUserId))
+      );
+    });
+
+    return (
+      matchedUser?.profileImage ||
+      matchedUser?.profile_image ||
+      ""
+    );
+  };
+
   const communityFeedback = feedback
     .slice()
     .sort(
@@ -3233,9 +3274,45 @@ useEffect(() => {
             </div>
 
 
-            <div className="category-count completed-count">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginLeft: "auto"
+              }}
+            >
 
-              {filteredResolvedReports.length}
+              <button
+                type="button"
+                onClick={() => {
+                  setAllReportsTab("completed");
+                  setShowAllReports(true);
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "5px",
+                  padding: "7px 10px",
+                  border: "1px solid rgba(185, 120, 255, 0.35)",
+                  borderRadius: "999px",
+                  background: "rgba(185, 120, 255, 0.08)",
+                  color: "#c38aff",
+                  fontFamily: "inherit",
+                  fontSize: "8px",
+                  fontWeight: 900,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap"
+                }}
+              >
+                View All Completed
+                <ArrowRight size={12} />
+              </button>
+
+              <div className="category-count completed-count">
+                {filteredResolvedReports.length}
+              </div>
 
             </div>
 
@@ -3498,10 +3575,39 @@ useEffect(() => {
 
                     <div className="student-feedback-user">
 
-                      <div className="student-feedback-avatar">
-                        {(item.name || "F")
-                          .charAt(0)
-                          .toUpperCase()}
+                      <div
+                        className="student-feedback-avatar"
+                        style={{
+                          width: "42px",
+                          height: "42px",
+                          minWidth: "42px",
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "linear-gradient(135deg, #ff247f, #8e38ff)",
+                          color: "#fff",
+                          fontSize: "14px",
+                          fontWeight: 900
+                        }}
+                      >
+                        {getFeedbackProfileImage(item) ? (
+                          <img
+                            src={getFeedbackProfileImage(item)}
+                            alt={item.name || "Student profile"}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                              display: "block"
+                            }}
+                          />
+                        ) : (
+                          (item.name || "F")
+                            .charAt(0)
+                            .toUpperCase()
+                        )}
                       </div>
 
                       <div>
