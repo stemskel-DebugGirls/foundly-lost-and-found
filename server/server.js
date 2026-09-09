@@ -131,6 +131,67 @@ const USER_PROFILE_COLUMNS =
 const MAX_IMAGE_BYTES =
   500 * 1024;
 
+
+/* =========================================================
+   SERVER-SIDE PROFILE IMAGE CACHE
+   Keeps the latest image in backend memory so normal image
+   requests do not repeatedly query Supabase.
+========================================================= */
+
+const PROFILE_IMAGE_CACHE = new Map();
+const MAX_PROFILE_CACHE_ITEMS = 50;
+
+function cacheProfileImage(userId, dataUrl) {
+  if (!userId || !dataUrl) return false;
+
+  const match = String(dataUrl).match(
+    /^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/is
+  );
+
+  if (!match) return false;
+
+  const [, contentType, base64] = match;
+  const buffer = Buffer.from(base64, "base64");
+
+  /* Never keep an oversized image in backend memory. */
+  if (buffer.length > MAX_IMAGE_BYTES) {
+    return false;
+  }
+
+  PROFILE_IMAGE_CACHE.delete(userId);
+
+  PROFILE_IMAGE_CACHE.set(userId, {
+    contentType,
+    buffer,
+    etag: `\"${crypto
+      .createHash("sha256")
+      .update(buffer)
+      .digest("hex")}\"`,
+  });
+
+  while (
+    PROFILE_IMAGE_CACHE.size >
+    MAX_PROFILE_CACHE_ITEMS
+  ) {
+    const oldestKey =
+      PROFILE_IMAGE_CACHE.keys().next().value;
+
+    PROFILE_IMAGE_CACHE.delete(
+      oldestKey
+    );
+  }
+
+  return true;
+}
+
+function clearProfileImageCache(userId) {
+  if (!userId) return;
+
+  PROFILE_IMAGE_CACHE.delete(
+    userId
+  );
+}
+
 function getDataUrlByteSize(value) {
   if (typeof value !== "string") {
     return 0;
@@ -144,7 +205,8 @@ function getDataUrlByteSize(value) {
     return 0;
   }
 
-  const base64 = match[1] || "";
+  const base64 =
+    match[1] || "";
 
   const padding =
     base64.endsWith("==")
@@ -165,27 +227,40 @@ function getDataUrlByteSize(value) {
    HELPERS
 ========================================================= */
 
-function mapUser(user, includeImage = false) {
+function mapUser(
+  user,
+  includeImage = false,
+  hasImage = false
+) {
   if (!user) return null;
 
   const imageUrl =
-    user.id
+    user.id && hasImage
       ? `${PUBLIC_API_BASE_URL}/api/users/${user.id}/image`
       : "";
 
   return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    points: user.points ?? 0,
+    id:
+      user.id,
 
-    profileImage: includeImage
-      ? user.profile_image || ""
-      : imageUrl,
+    name:
+      user.name,
 
-    profile_image: includeImage
-      ? user.profile_image || ""
-      : imageUrl,
+    email:
+      user.email,
+
+    points:
+      user.points ?? 0,
+
+    profileImage:
+      includeImage
+        ? user.profile_image || ""
+        : imageUrl,
+
+    profile_image:
+      includeImage
+        ? user.profile_image || ""
+        : imageUrl,
 
     createdAt:
       user.created_at || null,
@@ -202,7 +277,8 @@ function mapReport(
   if (!report) return null;
 
   return {
-    id: report.id,
+    id:
+      report.id,
 
     type:
       report.type,
@@ -225,11 +301,12 @@ function mapReport(
     phone:
       report.phone,
 
-    image: includeImage
-      ? report.image || null
-      : report.id
-      ? `${PUBLIC_API_BASE_URL}/api/reports/${report.id}/image`
-      : null,
+    image:
+      includeImage
+        ? report.image || null
+        : report.id
+        ? `${PUBLIC_API_BASE_URL}/api/reports/${report.id}/image`
+        : null,
 
     status:
       report.status,
@@ -335,14 +412,20 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    status: "OK",
-    service:
-      "Foundly Backend",
-  });
-});
+app.get(
+  "/api/health",
+  (req, res) => {
+    res.json({
+      success: true,
+
+      status:
+        "OK",
+
+      service:
+        "Foundly Backend",
+    });
+  }
+);
 
 /* =========================================================
    TEST SUPABASE
@@ -355,12 +438,13 @@ app.get(
       const {
         data,
         error,
-      } = await supabase
-        .from("users")
-        .select(
-          "id, name, email, points"
-        )
-        .limit(5);
+      } =
+        await supabase
+          .from("users")
+          .select(
+            "id, name, email, points"
+          )
+          .limit(5);
 
       if (error) {
         console.error(
@@ -370,8 +454,10 @@ app.get(
 
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to connect to Supabase.",
+
           error:
             error.message,
         });
@@ -379,8 +465,10 @@ app.get(
 
       return res.json({
         success: true,
+
         message:
           "Supabase connection successful! 💗",
+
         users:
           data || [],
       });
@@ -388,8 +476,10 @@ app.get(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Server error.",
+
         error:
           error.message,
       });
@@ -413,17 +503,21 @@ app.post(
       } = req.body;
 
       const cleanName =
-        String(name || "")
-          .trim();
+        String(
+          name || ""
+        ).trim();
 
       const cleanEmail =
-        String(email || "")
+        String(
+          email || ""
+        )
           .trim()
           .toLowerCase();
 
       if (!cleanName) {
         return res.status(400).json({
           success: false,
+
           message:
             "Name is required.",
         });
@@ -432,6 +526,7 @@ app.post(
       if (!cleanEmail) {
         return res.status(400).json({
           success: false,
+
           message:
             "Email is required.",
         });
@@ -444,6 +539,7 @@ app.post(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Please use your Delima email ending with @moe-dl.edu.my.",
         });
@@ -452,16 +548,19 @@ app.post(
       if (!password) {
         return res.status(400).json({
           success: false,
+
           message:
             "Password is required.",
         });
       }
 
       if (
-        String(password).length < 6
+        String(password).length <
+        6
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Password must be at least 6 characters.",
         });
@@ -473,6 +572,7 @@ app.post(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Passwords do not match.",
         });
@@ -480,7 +580,8 @@ app.post(
 
       const {
         data: existingUser,
-        error: existingUserError,
+        error:
+          existingUserError,
       } =
         await supabase
           .from("users")
@@ -493,7 +594,9 @@ app.post(
           )
           .maybeSingle();
 
-      if (existingUserError) {
+      if (
+        existingUserError
+      ) {
         console.error(
           "❌ Existing user check error:",
           existingUserError
@@ -501,8 +604,10 @@ app.post(
 
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to check existing account.",
+
           error:
             existingUserError.message,
         });
@@ -511,6 +616,7 @@ app.post(
       if (existingUser) {
         return res.status(409).json({
           success: false,
+
           message:
             "An account with this Delima email already exists.",
         });
@@ -544,7 +650,7 @@ app.post(
             },
           ])
           .select(
-            USER_PROFILE_COLUMNS
+            USER_PUBLIC_COLUMNS
           )
           .single();
 
@@ -556,8 +662,10 @@ app.post(
 
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to create account.",
+
           error:
             insertError.message,
         });
@@ -565,6 +673,7 @@ app.post(
 
       return res.status(201).json({
         success: true,
+
         message:
           "Account created successfully! 💗",
 
@@ -578,8 +687,10 @@ app.post(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong during signup.",
+
         error:
           error.message,
       });
@@ -601,13 +712,16 @@ app.post(
       } = req.body;
 
       const cleanEmail =
-        String(email || "")
+        String(
+          email || ""
+        )
           .trim()
           .toLowerCase();
 
       if (!cleanEmail) {
         return res.status(400).json({
           success: false,
+
           message:
             "Email is required.",
         });
@@ -620,6 +734,7 @@ app.post(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Please use your official Delima email.",
         });
@@ -628,6 +743,7 @@ app.post(
       if (!password) {
         return res.status(400).json({
           success: false,
+
           message:
             "Password is required.",
         });
@@ -661,8 +777,10 @@ app.post(
 
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to access your account.",
+
           error:
             userError.message,
         });
@@ -671,6 +789,7 @@ app.post(
       if (!user) {
         return res.status(401).json({
           success: false,
+
           message:
             "Email or password is incorrect. Please try again.",
         });
@@ -685,20 +804,61 @@ app.post(
       if (!passwordMatch) {
         return res.status(401).json({
           success: false,
+
           message:
             "Email or password is incorrect. Please try again.",
         });
       }
 
+      /*
+        Check only whether an image exists.
+        Never return the Base64 image in login response.
+      */
+
+      const {
+        data: profileImageMarker,
+        error:
+          profileImageMarkerError,
+      } =
+        await supabase
+          .from("users")
+          .select("id")
+          .eq(
+            "id",
+            user.id
+          )
+          .not(
+            "profile_image",
+            "is",
+            null
+          )
+          .maybeSingle();
+
+      if (
+        profileImageMarkerError
+      ) {
+        console.error(
+          "❌ Login profile image check error:",
+          profileImageMarkerError
+        );
+      }
+
+      const hasProfileImage =
+        Boolean(
+          profileImageMarker?.id
+        );
+
       return res.json({
         success: true,
+
         message:
           "Login successful! 💗",
 
         user: {
           ...mapUser(
             user,
-            false
+            false,
+            hasProfileImage
           ),
 
           reports:
@@ -709,8 +869,10 @@ app.post(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong during login.",
+
         error:
           error.message,
       });
@@ -736,6 +898,7 @@ app.post(
       if (!cleanEmail) {
         return res.status(400).json({
           success: false,
+
           message:
             "Please enter your Delima email.",
         });
@@ -748,6 +911,7 @@ app.post(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Please use your official Delima email ending with @moe-dl.edu.my.",
         });
@@ -771,8 +935,10 @@ app.post(
       if (userError) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to process your password reset request.",
+
           error:
             userError.message,
         });
@@ -781,15 +947,19 @@ app.post(
       if (!user) {
         return res.status(404).json({
           success: false,
+
           message:
             "No Foundly account was found with this email.",
         });
       }
 
       await supabase
-        .from("password_resets")
+        .from(
+          "password_resets"
+        )
         .update({
-          used: true,
+          used:
+            true,
         })
         .eq(
           "user_id",
@@ -837,8 +1007,10 @@ app.post(
       if (insertError) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to create your password reset request.",
+
           error:
             insertError.message,
         });
@@ -846,17 +1018,22 @@ app.post(
 
       return res.json({
         success: true,
+
         message:
           "Password reset request created successfully!",
+
         resetToken,
+
         expiresAt,
       });
 
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while processing your password reset request.",
+
         error:
           error.message,
       });
@@ -881,6 +1058,7 @@ app.post(
       if (!token) {
         return res.status(400).json({
           success: false,
+
           message:
             "Reset request is invalid. Please start again.",
         });
@@ -889,16 +1067,20 @@ app.post(
       if (!newPassword) {
         return res.status(400).json({
           success: false,
+
           message:
             "Please enter a new password.",
         });
       }
 
       if (
-        String(newPassword).length < 6
+        String(
+          newPassword
+        ).length < 6
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Password must contain at least 6 characters.",
         });
@@ -910,6 +1092,7 @@ app.post(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Passwords do not match.",
         });
@@ -917,7 +1100,8 @@ app.post(
 
       const {
         data: resetRequest,
-        error: resetLookupError,
+        error:
+          resetLookupError,
       } =
         await supabase
           .from(
@@ -935,8 +1119,10 @@ app.post(
       if (resetLookupError) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to verify your password reset request.",
+
           error:
             resetLookupError.message,
         });
@@ -945,14 +1131,18 @@ app.post(
       if (!resetRequest) {
         return res.status(400).json({
           success: false,
+
           message:
             "This password reset request is invalid.",
         });
       }
 
-      if (resetRequest.used) {
+      if (
+        resetRequest.used
+      ) {
         return res.status(400).json({
           success: false,
+
           message:
             "This password reset request has already been used. Please start again.",
         });
@@ -985,6 +1175,7 @@ app.post(
 
         return res.status(400).json({
           success: false,
+
           message:
             "This password reset request has expired. Please start again.",
         });
@@ -998,7 +1189,8 @@ app.post(
 
       const {
         data: updatedUser,
-        error: updatePasswordError,
+        error:
+          updatePasswordError,
       } =
         await supabase
           .from("users")
@@ -1015,11 +1207,15 @@ app.post(
           )
           .single();
 
-      if (updatePasswordError) {
+      if (
+        updatePasswordError
+      ) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to update your password.",
+
           error:
             updatePasswordError.message,
         });
@@ -1040,6 +1236,7 @@ app.post(
 
       return res.json({
         success: true,
+
         message:
           "Your password has been reset successfully! You can now login with your new password. 💗",
 
@@ -1053,8 +1250,10 @@ app.post(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while resetting your password.",
+
         error:
           error.message,
       });
@@ -1073,23 +1272,57 @@ app.get(
       /*
         IMPORTANT:
         Leaderboard does not need profile_image.
+
+        We deliberately load users and image-existence
+        markers separately.
+
+        The second query only returns IDs for users who
+        actually have an image.
+
+        Base64 image data is NEVER included here.
       */
+
+      const [
+        usersResult,
+        imageMarkerResult,
+      ] =
+        await Promise.all([
+          supabase
+            .from("users")
+            .select(
+              USER_PUBLIC_COLUMNS
+            )
+            .order(
+              "points",
+              {
+                ascending:
+                  false,
+              },
+            ),
+
+          supabase
+            .from("users")
+            .select("id")
+            .not(
+              "profile_image",
+              "is",
+              null
+            ),
+        ]);
 
       const {
         data,
         error,
       } =
-        await supabase
-          .from("users")
-          .select(
-            USER_PUBLIC_COLUMNS
-          )
-          .order(
-            "points",
-            {
-              ascending: false,
-            }
-          );
+        usersResult;
+
+      const {
+        data:
+          imageMarkers,
+        error:
+          imageMarkerError,
+      } =
+        imageMarkerResult;
 
       if (error) {
         console.error(
@@ -1099,32 +1332,61 @@ app.get(
 
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to load users.",
+
           error:
             error.message,
         });
       }
 
+      if (
+        imageMarkerError
+      ) {
+        console.error(
+          "❌ User image marker error:",
+          imageMarkerError
+        );
+      }
+
+      const usersWithImages =
+        new Set(
+          (
+            imageMarkers ||
+            []
+          ).map(
+            (item) =>
+              String(item.id)
+          )
+        );
+
       return res.json({
         success: true,
 
         users:
-          (data || [])
-            .map(
-              (user) =>
-                mapUser(
-                  user,
-                  false
+          (
+            data ||
+            []
+          ).map(
+            (user) =>
+              mapUser(
+                user,
+                false,
+                usersWithImages.has(
+                  String(user.id)
                 )
-            ),
+              )
+          ),
       });
 
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while loading users.",
+
         error:
           error.message,
       });
@@ -1140,8 +1402,9 @@ app.get(
   "/api/users/:id/image",
   async (req, res) => {
     try {
-      const { id } =
-        req.params;
+      const {
+        id,
+      } = req.params;
 
       if (!id) {
         return res
@@ -1149,71 +1412,125 @@ app.get(
           .end();
       }
 
-      const {
-        data,
-        error,
-      } =
-        await supabase
-          .from("users")
-          .select(
-            "profile_image"
-          )
-          .eq(
-            "id",
-            id
-          )
-          .maybeSingle();
-
-      if (error) {
-        console.error(
-          "❌ User image error:",
-          error
+      let cached =
+        PROFILE_IMAGE_CACHE.get(
+          id
         );
 
-        return res
-          .status(500)
-          .end();
+      /*
+        FIRST REQUEST / CACHE MISS
+        Only this path queries Supabase.
+      */
+
+      if (!cached) {
+        const {
+          data,
+          error,
+        } =
+          await supabase
+            .from("users")
+            .select(
+              "profile_image"
+            )
+            .eq(
+              "id",
+              id
+            )
+            .maybeSingle();
+
+        if (error) {
+          console.error(
+            "❌ User image error:",
+            error
+          );
+
+          return res
+            .status(500)
+            .end();
+        }
+
+        /*
+          IMPORTANT:
+          A new user without a profile image
+          must remain image-less.
+        */
+
+        if (
+          !data?.profile_image
+        ) {
+          clearProfileImageCache(
+            id
+          );
+
+          return res
+            .status(404)
+            .end();
+        }
+
+        const cachedSuccessfully =
+          cacheProfileImage(
+            id,
+            data.profile_image
+          );
+
+        if (
+          !cachedSuccessfully
+        ) {
+          return res
+            .status(415)
+            .end();
+        }
+
+        cached =
+          PROFILE_IMAGE_CACHE.get(
+            id
+          );
       }
 
       if (
-        !data?.profile_image
+        !cached?.buffer
       ) {
         return res
           .status(404)
           .end();
       }
 
-      const raw =
-        String(
-          data.profile_image
-        );
+      /*
+        Profile images can change.
+        Therefore do NOT use immutable.
+      */
 
-      const match =
-        raw.match(
-          /^data:([^;]+);base64,(.+)$/s
+      const clientETag =
+        req.get(
+          "If-None-Match"
         );
-
-      if (!match) {
-        return res
-          .status(415)
-          .end();
-      }
 
       res.set(
         "Cache-Control",
-        "public, max-age=86400, immutable"
+        "public, max-age=0, must-revalidate"
+      );
+
+      res.set(
+        "ETag",
+        cached.etag
       );
 
       res.set(
         "Content-Type",
-        match[1]
+        cached.contentType
       );
 
+      if (
+        clientETag ===
+        cached.etag
+      ) {
+        return res
+          .status(304)
+          .end();
+      }
+
       return res.send(
-        Buffer.from(
-          match[2],
-          "base64"
-        )
+        cached.buffer
       );
 
     } catch (error) {
@@ -1237,7 +1554,9 @@ app.patch(
   "/api/users/:id/profile",
   async (req, res) => {
     try {
-      const { id } = req.params;
+      const {
+        id,
+      } = req.params;
 
       const {
         name,
@@ -1245,11 +1564,14 @@ app.patch(
       } = req.body;
 
       const cleanName =
-        String(name || "").trim();
+        String(
+          name || ""
+        ).trim();
 
       if (!id) {
         return res.status(400).json({
           success: false,
+
           message:
             "User ID is required.",
         });
@@ -1258,6 +1580,7 @@ app.patch(
       if (!cleanName) {
         return res.status(400).json({
           success: false,
+
           message:
             "Name is required.",
         });
@@ -1269,10 +1592,16 @@ app.patch(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Profile image must be a valid string.",
         });
       }
+
+      /*
+        Validate profile image size and type
+        before anything is stored.
+      */
 
       if (profileImage) {
         const profileImageBytes =
@@ -1286,6 +1615,7 @@ app.patch(
         ) {
           return res.status(400).json({
             success: false,
+
             message:
               "Profile image must be 500 KB or smaller.",
           });
@@ -1298,14 +1628,22 @@ app.patch(
         ) {
           return res.status(400).json({
             success: false,
+
             message:
               "Only JPG, PNG or WebP profile images are allowed.",
           });
         }
       }
 
+      /*
+        Update Supabase first.
+        Cache is updated only after database
+        update succeeds.
+      */
+
       const {
-        data: updatedUser,
+        data:
+          updatedUser,
         error,
       } =
         await supabase
@@ -1335,17 +1673,54 @@ app.patch(
 
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to save your profile.",
+
           error:
             error.message,
         });
       }
 
+      /*
+        KEEP BACKEND CACHE IN SYNC
+      */
+
+      if (profileImage) {
+        const cachedSuccessfully =
+          cacheProfileImage(
+            id,
+            profileImage
+          );
+
+        if (
+          !cachedSuccessfully
+        ) {
+          clearProfileImageCache(
+            id
+          );
+        }
+      } else {
+        /*
+          Remove old image from cache
+        */
+        clearProfileImageCache(
+          id
+        );
+      }
+
+      /*
+        Add a new URL version after every successful
+        profile update.
+
+        This guarantees that the browser does not
+        continue using the old profile picture.
+      */
+
       const freshImageUrl =
-        updatedUser?.id
-          ? `${PUBLIC_API_BASE_URL}/api/users/${updatedUser.id}/image?v=${Date.now()}`
-          : "";
+  profileImage && updatedUser?.id
+    ? `${PUBLIC_API_BASE_URL}/api/users/${updatedUser.id}/image?v=${Date.now()}`
+    : "";
 
       return res.json({
         success: true,
@@ -1356,7 +1731,10 @@ app.patch(
         user: {
           ...mapUser(
             updatedUser,
-            false
+            false,
+            Boolean(
+              profileImage
+            )
           ),
 
           profileImage:
@@ -1375,8 +1753,10 @@ app.patch(
 
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while saving your profile.",
+
         error:
           error.message,
       });
@@ -1394,7 +1774,7 @@ app.get(
     try {
       /*
         IMPORTANT:
-        Do NOT load image from Supabase here.
+        Do NOT load report image here.
       */
 
       const {
@@ -1409,7 +1789,8 @@ app.get(
           .order(
             "created_at",
             {
-              ascending: false,
+              ascending:
+                false,
             }
           );
 
@@ -1421,8 +1802,10 @@ app.get(
 
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to load reports.",
+
           error:
             error.message,
         });
@@ -1432,21 +1815,27 @@ app.get(
         success: true,
 
         reports:
-          (data || [])
-            .map(
-              (report) =>
-                mapReport(
-                  report,
-                  false
-                )
-            ),
+          (
+            data ||
+            []
+          ).map(
+            (
+              report
+            ) =>
+              mapReport(
+                report,
+                false
+              )
+          ),
       });
 
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while loading reports.",
+
         error:
           error.message,
       });
@@ -1462,8 +1851,9 @@ app.get(
   "/api/reports/:id/image",
   async (req, res) => {
     try {
-      const { id } =
-        req.params;
+      const {
+        id,
+      } = req.params;
 
       if (!id) {
         return res
@@ -1599,6 +1989,7 @@ async function createReport(
     if (!cleanUserId) {
       return res.status(400).json({
         success: false,
+
         message:
           "User ID is required.",
       });
@@ -1607,6 +1998,7 @@ async function createReport(
     if (!cleanItemName) {
       return res.status(400).json({
         success: false,
+
         message:
           "Item name is required.",
       });
@@ -1615,6 +2007,7 @@ async function createReport(
     if (!cleanDescription) {
       return res.status(400).json({
         success: false,
+
         message:
           "Description is required.",
       });
@@ -1623,6 +2016,7 @@ async function createReport(
     if (!cleanLocation) {
       return res.status(400).json({
         success: false,
+
         message:
           "Location is required.",
       });
@@ -1631,6 +2025,7 @@ async function createReport(
     if (!date) {
       return res.status(400).json({
         success: false,
+
         message:
           "Date is required.",
       });
@@ -1639,6 +2034,7 @@ async function createReport(
     if (!cleanPhone) {
       return res.status(400).json({
         success: false,
+
         message:
           "Contact number is required.",
       });
@@ -1650,9 +2046,13 @@ async function createReport(
     --------------------------------------------------------- */
 
     if (image) {
-      if (typeof image !== "string") {
+      if (
+        typeof image !==
+        "string"
+      ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Report image must be a valid string.",
         });
@@ -1669,6 +2069,7 @@ async function createReport(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Report image must be 500 KB or smaller.",
         });
@@ -1681,6 +2082,7 @@ async function createReport(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Only JPG, PNG or WebP report images are allowed.",
         });
@@ -1749,8 +2151,10 @@ async function createReport(
     if (userError) {
       return res.status(500).json({
         success: false,
+
         message:
           "Unable to verify your account.",
+
         error:
           userError.message,
       });
@@ -1759,6 +2163,7 @@ async function createReport(
     if (!user) {
       return res.status(404).json({
         success: false,
+
         message:
           "User account could not be found.",
       });
@@ -1791,13 +2196,15 @@ async function createReport(
               date,
 
             time_lost:
-              time || null,
+              time ||
+              null,
 
             phone:
               cleanPhone,
 
             image:
-              image || null,
+              image ||
+              null,
 
             status:
               "active",
@@ -1822,8 +2229,10 @@ async function createReport(
 
       return res.status(500).json({
         success: false,
+
         message:
           `Unable to save your ${type} report.`,
+
         error:
           reportError.message,
       });
@@ -1835,8 +2244,10 @@ async function createReport(
       ) + 10;
 
     const {
-      data: updatedUser,
-      error: pointsError,
+      data:
+        updatedUser,
+      error:
+        pointsError,
     } =
       await supabase
         .from("users")
@@ -1856,8 +2267,10 @@ async function createReport(
     if (pointsError) {
       return res.status(500).json({
         success: false,
+
         message:
           "Report was saved, but points could not be updated.",
+
         error:
           pointsError.message,
       });
@@ -1886,15 +2299,20 @@ async function createReport(
       user:
         mapUser(
           updatedUser,
-          false
+          false,
+          Boolean(
+            updatedUser?.profile_image
+          )
         ),
     });
 
   } catch (error) {
     return res.status(500).json({
       success: false,
+
       message:
         `Something went wrong while submitting your ${type} report.`,
+
       error:
         error.message,
     });
@@ -1933,8 +2351,9 @@ app.patch(
   "/api/reports/:id/claim",
   async (req, res) => {
     try {
-      const { id } =
-        req.params;
+      const {
+        id,
+      } = req.params;
 
       const {
         userId,
@@ -1945,6 +2364,7 @@ app.patch(
       if (!id) {
         return res.status(400).json({
           success: false,
+
           message:
             "Report ID is required.",
         });
@@ -1956,6 +2376,7 @@ app.patch(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "User information is required.",
         });
@@ -1969,7 +2390,8 @@ app.patch(
 
       const {
         data: report,
-        error: reportError,
+        error:
+          reportError,
       } =
         await supabase
           .from("reports")
@@ -1983,8 +2405,10 @@ app.patch(
       if (reportError) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to find this report.",
+
           error:
             reportError.message,
         });
@@ -1993,6 +2417,7 @@ app.patch(
       if (!report) {
         return res.status(404).json({
           success: false,
+
           message:
             "Report not found.",
         });
@@ -2006,6 +2431,7 @@ app.patch(
       ) {
         return res.status(409).json({
           success: false,
+
           message:
             "This report has already been resolved.",
         });
@@ -2021,7 +2447,8 @@ app.patch(
 
       const claimerEmail =
         String(
-          userEmail || ""
+          userEmail ||
+            ""
         )
           .trim()
           .toLowerCase();
@@ -2034,6 +2461,7 @@ app.patch(
       ) {
         return res.status(403).json({
           success: false,
+
           message:
             "You cannot claim your own report.",
         });
@@ -2043,8 +2471,10 @@ app.patch(
         new Date().toISOString();
 
       const {
-        data: updatedReport,
-        error: updateError,
+        data:
+          updatedReport,
+        error:
+          updateError,
       } =
         await supabase
           .from("reports")
@@ -2053,7 +2483,8 @@ app.patch(
               "resolved",
 
             claimed_by:
-              userEmail || "",
+              userEmail ||
+              "",
 
             claimed_by_name:
               userName ||
@@ -2072,8 +2503,10 @@ app.patch(
       if (updateError) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to resolve this report.",
+
           error:
             updateError.message,
         });
@@ -2095,8 +2528,10 @@ app.patch(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while claiming this report.",
+
         error:
           error.message,
       });
@@ -2122,15 +2557,18 @@ app.get(
           .order(
             "created_at",
             {
-              ascending: false,
+              ascending:
+                false,
             }
           );
 
       if (error) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to load feedback.",
+
           error:
             error.message,
         });
@@ -2140,17 +2578,21 @@ app.get(
         success: true,
 
         feedback:
-          (data || [])
-            .map(
-              mapFeedback
-            ),
+          (
+            data ||
+            []
+          ).map(
+            mapFeedback
+          ),
       });
 
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while loading feedback.",
+
         error:
           error.message,
       });
@@ -2205,6 +2647,7 @@ app.post(
       if (!cleanName) {
         return res.status(400).json({
           success: false,
+
           message:
             "Name is required.",
         });
@@ -2213,6 +2656,7 @@ app.post(
       if (!cleanEmail) {
         return res.status(400).json({
           success: false,
+
           message:
             "Email is required.",
         });
@@ -2224,6 +2668,7 @@ app.post(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Rating must be between 1 and 5.",
         });
@@ -2232,6 +2677,7 @@ app.post(
       if (!cleanCategory) {
         return res.status(400).json({
           success: false,
+
           message:
             "Feedback category is required.",
         });
@@ -2240,6 +2686,7 @@ app.post(
       if (!cleanComment) {
         return res.status(400).json({
           success: false,
+
           message:
             "Feedback comment is required.",
         });
@@ -2279,8 +2726,10 @@ app.post(
       if (error) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to save your feedback.",
+
           error:
             error.message,
         });
@@ -2301,8 +2750,10 @@ app.post(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while submitting feedback.",
+
         error:
           error.message,
       });
@@ -2318,12 +2769,14 @@ app.delete(
   "/api/feedback/:id",
   async (req, res) => {
     try {
-      const { id } =
-        req.params;
+      const {
+        id,
+      } = req.params;
 
       if (!id) {
         return res.status(400).json({
           success: false,
+
           message:
             "Feedback ID is required.",
         });
@@ -2343,8 +2796,10 @@ app.delete(
       if (error) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to delete feedback.",
+
           error:
             error.message,
         });
@@ -2352,6 +2807,7 @@ app.delete(
 
       return res.json({
         success: true,
+
         message:
           "Feedback deleted successfully.",
       });
@@ -2359,8 +2815,10 @@ app.delete(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while deleting feedback.",
+
         error:
           error.message,
       });
@@ -2386,15 +2844,18 @@ app.get(
           .order(
             "created_at",
             {
-              ascending: true,
+              ascending:
+                true,
             }
           );
 
       if (error) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to load messages.",
+
           error:
             error.message,
         });
@@ -2404,17 +2865,21 @@ app.get(
         success: true,
 
         messages:
-          (data || [])
-            .map(
-              mapMessage
-            ),
+          (
+            data ||
+            []
+          ).map(
+            mapMessage
+          ),
       });
 
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while loading messages.",
+
         error:
           error.message,
       });
@@ -2430,12 +2895,14 @@ app.get(
   "/api/messages/:userId",
   async (req, res) => {
     try {
-      const { userId } =
-        req.params;
+      const {
+        userId,
+      } = req.params;
 
       if (!userId) {
         return res.status(400).json({
           success: false,
+
           message:
             "User ID is required.",
         });
@@ -2454,15 +2921,18 @@ app.get(
           .order(
             "created_at",
             {
-              ascending: true,
+              ascending:
+                true,
             }
           );
 
       if (error) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to load your messages.",
+
           error:
             error.message,
         });
@@ -2472,17 +2942,21 @@ app.get(
         success: true,
 
         messages:
-          (data || [])
-            .map(
-              mapMessage
-            ),
+          (
+            data ||
+            []
+          ).map(
+            mapMessage
+          ),
       });
 
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while loading your messages.",
+
         error:
           error.message,
       });
@@ -2520,6 +2994,7 @@ app.post(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Sender and receiver are required.",
         });
@@ -2531,6 +3006,7 @@ app.post(
       ) {
         return res.status(400).json({
           success: false,
+
           message:
             "Sender and receiver email are required.",
         });
@@ -2539,6 +3015,7 @@ app.post(
       if (!cleanMessage) {
         return res.status(400).json({
           success: false,
+
           message:
             "Message cannot be empty.",
         });
@@ -2586,8 +3063,10 @@ app.post(
       if (error) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to send message.",
+
           error:
             error.message,
         });
@@ -2608,8 +3087,10 @@ app.post(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while sending message.",
+
         error:
           error.message,
       });
@@ -2633,55 +3114,60 @@ async function syncNotifications() {
       usersResult,
       feedbackResult,
       messagesResult,
-    ] = await Promise.all([
-      supabase
-        .from("reports")
-        .select(
-          "id, user_id, type, item_name, status, resolved_at, created_at"
-        )
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        ),
+    ] =
+      await Promise.all([
+        supabase
+          .from("reports")
+          .select(
+            "id, user_id, type, item_name, status, resolved_at, created_at"
+          )
+          .order(
+            "created_at",
+            {
+              ascending:
+                false,
+            }
+          ),
 
-      supabase
-        .from("users")
-        .select(
-          "id, name, email, created_at"
-        )
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        ),
+        supabase
+          .from("users")
+          .select(
+            "id, name, email, created_at"
+          )
+          .order(
+            "created_at",
+            {
+              ascending:
+                false,
+            }
+          ),
 
-      supabase
-        .from("feedback")
-        .select(
-          "id, rating, created_at"
-        )
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        ),
+        supabase
+          .from("feedback")
+          .select(
+            "id, rating, created_at"
+          )
+          .order(
+            "created_at",
+            {
+              ascending:
+                false,
+            }
+          ),
 
-      supabase
-        .from("messages")
-        .select(
-          "id, sender_name, receiver_id, created_at"
-        )
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        ),
-    ]);
+        supabase
+          .from("messages")
+          .select(
+            "id, sender_name, receiver_id, created_at"
+          )
+          .order(
+            "created_at",
+            {
+              ascending:
+                false,
+            }
+          ),
+      ]);
 
     const reports =
       reportsResult.data ||
@@ -3051,7 +3537,9 @@ async function syncNotifications() {
       error,
     } =
       await supabase
-        .from("notifications")
+        .from(
+          "notifications"
+        )
         .upsert(
           notifications,
           {
@@ -3102,7 +3590,8 @@ app.get(
           .order(
             "created_at",
             {
-              ascending: false,
+              ascending:
+                false,
             }
           );
 
@@ -3113,6 +3602,7 @@ app.get(
         if (!userId) {
           return res.status(400).json({
             success: false,
+
             message:
               "User ID is required for student notifications.",
           });
@@ -3149,8 +3639,10 @@ app.get(
       if (error) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to load notifications.",
+
           error:
             error.message,
         });
@@ -3158,6 +3650,7 @@ app.get(
 
       return res.json({
         success: true,
+
         notifications:
           data || [],
       });
@@ -3165,8 +3658,10 @@ app.get(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while loading notifications.",
+
         error:
           error.message,
       });
@@ -3182,12 +3677,14 @@ app.patch(
   "/api/notifications/:id/read",
   async (req, res) => {
     try {
-      const { id } =
-        req.params;
+      const {
+        id,
+      } = req.params;
 
       if (!id) {
         return res.status(400).json({
           success: false,
+
           message:
             "Notification ID is required.",
         });
@@ -3215,8 +3712,10 @@ app.patch(
       if (error) {
         return res.status(500).json({
           success: false,
+
           message:
             "Unable to update notification.",
+
           error:
             error.message,
         });
@@ -3224,6 +3723,7 @@ app.patch(
 
       return res.json({
         success: true,
+
         notification:
           data,
       });
@@ -3231,8 +3731,10 @@ app.patch(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while updating notification.",
+
         error:
           error.message,
       });
@@ -3260,6 +3762,7 @@ app.patch(
         if (!userId) {
           return res.status(400).json({
             success: false,
+
             message:
               "User ID is required.",
           });
@@ -3288,8 +3791,10 @@ app.patch(
         if (error) {
           return res.status(500).json({
             success: false,
+
             message:
               "Unable to mark notifications as read.",
+
             error:
               error.message,
           });
@@ -3318,8 +3823,10 @@ app.patch(
         if (error) {
           return res.status(500).json({
             success: false,
+
             message:
               "Unable to mark notifications as read.",
+
             error:
               error.message,
           });
@@ -3328,6 +3835,7 @@ app.patch(
       } else {
         return res.status(400).json({
           success: false,
+
           message:
             "Notification role is required.",
         });
@@ -3335,6 +3843,7 @@ app.patch(
 
       return res.json({
         success: true,
+
         message:
           "All notifications marked as read.",
       });
@@ -3342,8 +3851,10 @@ app.patch(
     } catch (error) {
       return res.status(500).json({
         success: false,
+
         message:
           "Something went wrong while updating notifications.",
+
         error:
           error.message,
       });

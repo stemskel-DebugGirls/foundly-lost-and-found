@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 import {
   ArrowLeft,
   Camera,
@@ -17,16 +18,57 @@ import {
 import "./Profile.css";
 import API_URL from "../api";
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
 function withCacheBust(url) {
   if (!url) return "";
-  if (typeof url !== "string") return url;
 
-  const separator = url.includes("?") ? "&" : "?";
+  if (typeof url !== "string") {
+    return url;
+  }
+
+  const separator = url.includes("?")
+    ? "&"
+    : "?";
+
   return `${url}${separator}v=${Date.now()}`;
 }
 
+/*
+  Only keep lightweight HTTP image URLs in localStorage.
+
+  NEVER store Base64 image data in localStorage.
+*/
+function getSafeImageUrl(value) {
+  if (
+    typeof value !== "string" ||
+    !value.trim()
+  ) {
+    return "";
+  }
+
+  const cleanValue =
+    value.trim();
+
+  if (
+    cleanValue.startsWith("http://") ||
+    cleanValue.startsWith("https://")
+  ) {
+    return cleanValue;
+  }
+
+  return "";
+}
+
+/* =========================================================
+   PROFILE
+========================================================= */
+
 function Profile({
   currentUser,
+  onProfileUpdated,
   onBack,
 }) {
   /* =====================================================
@@ -35,16 +77,18 @@ function Profile({
 
   const [name, setName] = useState(
     currentUser?.name ||
-    currentUser?.fullName ||
-    currentUser?.username ||
-    ""
+      currentUser?.fullName ||
+      currentUser?.username ||
+      ""
   );
 
   const email =
     currentUser?.email || "";
 
   const userEmail =
-    email.trim().toLowerCase();
+    email
+      .trim()
+      .toLowerCase();
 
   /* =====================================================
      PROFILE IMAGE
@@ -52,7 +96,9 @@ function Profile({
 
   const [profileImage, setProfileImage] =
     useState(
-      currentUser?.profileImage || ""
+      currentUser?.profileImage ||
+        currentUser?.profile_image ||
+        ""
     );
 
   /* =====================================================
@@ -60,7 +106,11 @@ function Profile({
   ===================================================== */
 
   const [points, setPoints] =
-    useState(0);
+    useState(
+      Number(
+        currentUser?.points || 0
+      )
+    );
 
   /* =====================================================
      REPORTS
@@ -80,64 +130,118 @@ function Profile({
     useState(false);
 
   /* =====================================================
-     LOAD DATA FROM SUPABASE
+     LOAD PROFILE DATA
   ===================================================== */
 
   useEffect(() => {
     let cancelled = false;
 
     const loadProfileData = async () => {
+      /* -------------------------------------------------
+         LOAD USER
+      ------------------------------------------------- */
+
       try {
         const response = await fetch(
           `${API_URL}/api/users`
         );
 
-        const data = await response.json();
+        const data =
+          await response.json();
 
-        if (response.ok && Array.isArray(data.users)) {
-          const serverUser = data.users.find(
-            (user) =>
-              user.email?.trim().toLowerCase() === userEmail
-          );
+        if (
+          response.ok &&
+          Array.isArray(data.users)
+        ) {
+          const serverUser =
+            data.users.find(
+              (user) =>
+                user.email
+                  ?.trim()
+                  .toLowerCase() ===
+                userEmail
+            );
 
-          if (serverUser && !cancelled) {
-            setName(
+          if (
+            serverUser &&
+            !cancelled
+          ) {
+            const serverName =
               serverUser.name ||
               currentUser?.name ||
-              ""
-            );
+              "";
+
             const serverProfileImage =
               serverUser.profileImage ||
               serverUser.profile_image ||
               "";
 
-            setProfileImage(
-              withCacheBust(
-                serverProfileImage
-              )
-            );
-            setPoints(
-              Number(serverUser.points || 0)
+            const freshProfileImage =
+              serverProfileImage
+                ? withCacheBust(
+                    serverProfileImage
+                  )
+                : "";
+
+            const serverPoints =
+              Number(
+                serverUser.points || 0
+              );
+
+            setName(
+              serverName
             );
 
+            setProfileImage(
+              freshProfileImage
+            );
+
+            setPoints(
+              serverPoints
+            );
+
+            /*
+              Keep localStorage lightweight.
+
+              Store URL only if it is an HTTP URL.
+              Never store Base64.
+            */
             saveSafeUserLocally({
               ...(currentUser || {}),
-              id: serverUser.id,
-              name: serverUser.name,
-              email: serverUser.email,
-              points: Number(
-                serverUser.points || 0
-              ),
-              reports: totalReports,
+              id:
+                serverUser.id ||
+                currentUser?.id ||
+                null,
+
+              name:
+                serverName,
+
+              email:
+                serverUser.email ||
+                currentUser?.email ||
+                "",
+
+              points:
+                serverPoints,
+
+              profileImage:
+                serverProfileImage,
+
+              profile_image:
+                serverProfileImage,
+
+              reports:
+                reports.length,
+
               created_at:
                 serverUser.created_at ||
                 currentUser?.created_at ||
                 null,
+
               createdAt:
                 serverUser.createdAt ||
                 serverUser.created_at ||
                 currentUser?.createdAt ||
-                currentUser?.created_at ||
                 null,
             });
           }
@@ -149,41 +253,68 @@ function Profile({
         );
 
         if (!cancelled) {
-          const storedPoints = userEmail
-            ? localStorage.getItem(
-                `foundlyPoints_${userEmail}`
-              )
-            : null;
+          const storedPoints =
+            userEmail
+              ? localStorage.getItem(
+                  `foundlyPoints_${userEmail}`
+                )
+              : null;
 
           setPoints(
             storedPoints !== null
-              ? Number(storedPoints) || 0
-              : Number(currentUser?.points) || 0
+              ? Number(
+                  storedPoints
+                ) || 0
+              : Number(
+                  currentUser?.points
+                ) || 0
           );
 
-          setProfileImage(
+          const fallbackImage =
             currentUser?.profileImage ||
             currentUser?.profile_image ||
-            ""
+            "";
+
+          setProfileImage(
+            fallbackImage
           );
         }
       }
+
+      /* -------------------------------------------------
+         LOAD REPORTS
+      ------------------------------------------------- */
 
       try {
         const response = await fetch(
           `${API_URL}/api/reports`
         );
 
-        const data = await response.json();
+        const data =
+          await response.json();
 
-        if (response.ok && Array.isArray(data.reports) && !cancelled) {
-          setReports(
+        if (
+          response.ok &&
+          Array.isArray(
+            data.reports
+          ) &&
+          !cancelled
+        ) {
+          const userReports =
             data.reports.filter(
               (report) =>
-                (report.reportedBy || report.reported_by || "")
+                (
+                  report.reportedBy ||
+                  report.reported_by ||
+                  ""
+                )
                   .trim()
-                  .toLowerCase() === userEmail
-            )
+                  .toLowerCase() ===
+                userEmail
+            );
+
+          setReports(
+            userReports
           );
         }
       } catch (error) {
@@ -193,25 +324,35 @@ function Profile({
         );
 
         try {
-          const savedReports = JSON.parse(
-            localStorage.getItem(
-              "foundlyReports"
-            ) || "[]"
-          );
+          const savedReports =
+            JSON.parse(
+              localStorage.getItem(
+                "foundlyReports"
+              ) || "[]"
+            );
 
           if (!cancelled) {
             setReports(
-              Array.isArray(savedReports)
+              Array.isArray(
+                savedReports
+              )
                 ? savedReports.filter(
                     (report) =>
-                      report.reportedBy?.trim().toLowerCase() ===
+                      (
+                        report.reportedBy ||
+                        ""
+                      )
+                        .trim()
+                        .toLowerCase() ===
                       userEmail
                   )
                 : []
             );
           }
         } catch {
-          if (!cancelled) setReports([]);
+          if (!cancelled) {
+            setReports([]);
+          }
         }
       }
     };
@@ -221,10 +362,13 @@ function Profile({
     return () => {
       cancelled = true;
     };
-  }, [userEmail, currentUser]);
+  }, [
+    userEmail,
+    currentUser,
+  ]);
 
   /* =====================================================
-     REPORT STATISTICS
+     STATISTICS
   ===================================================== */
 
   const totalReports =
@@ -233,20 +377,24 @@ function Profile({
   const lostReports =
     reports.filter(
       (report) =>
-        report.type === "lost"
+        report.type ===
+        "lost"
     ).length;
 
   const foundReports =
     reports.filter(
       (report) =>
-        report.type === "found"
+        report.type ===
+        "found"
     ).length;
 
   const reunitedReports =
     reports.filter(
       (report) =>
-        report.status === "resolved" ||
-        report.status === "Resolved"
+        report.status ===
+          "resolved" ||
+        report.status ===
+          "Resolved"
     ).length;
 
   /* =====================================================
@@ -259,172 +407,419 @@ function Profile({
     maxHeight = 1280,
     maxBytes = 500 * 1024
   ) => {
-    return new Promise((resolve, reject) => {
-      const objectUrl = URL.createObjectURL(file);
-      const img = new Image();
-
-      img.onload = () => {
-        try {
-          let width = img.naturalWidth;
-          let height = img.naturalHeight;
-
-          const initialScale = Math.min(
-            1,
-            maxWidth / width,
-            maxHeight / height
+    return new Promise(
+      (resolve, reject) => {
+        const objectUrl =
+          URL.createObjectURL(
+            file
           );
 
-          width = Math.max(1, Math.round(width * initialScale));
-          height = Math.max(1, Math.round(height * initialScale));
+        const img =
+          new Image();
 
-          let result = "";
-          let quality = 0.78;
+        img.onload = () => {
+          try {
+            let width =
+              img.naturalWidth;
 
-          for (let attempt = 0; attempt < 30; attempt += 1) {
-            const canvas = document.createElement("canvas");
-            canvas.width = width;
-            canvas.height = height;
+            let height =
+              img.naturalHeight;
 
-            const ctx = canvas.getContext("2d");
+            const initialScale =
+              Math.min(
+                1,
+                maxWidth /
+                  width,
+                maxHeight /
+                  height
+              );
 
-            if (!ctx) {
-              URL.revokeObjectURL(objectUrl);
-              reject(new Error("Unable to process this image."));
-              return;
-            }
-
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, width, height);
-            ctx.drawImage(img, 0, 0, width, height);
-
-            result = canvas.toDataURL("image/jpeg", quality);
-
-            const estimatedBytes = Math.floor(
-              result.length * 0.75
-            );
-
-            if (estimatedBytes <= maxBytes) {
-              URL.revokeObjectURL(objectUrl);
-              resolve(result);
-              return;
-            }
-
-            if (quality > 0.38) {
-              quality -= 0.06;
-              continue;
-            }
-
-            width = Math.max(320, Math.round(width * 0.82));
-            height = Math.max(240, Math.round(height * 0.82));
-            quality = 0.68;
-          }
-
-          while (true) {
-            const canvas = document.createElement("canvas");
-            canvas.width = width;
-            canvas.height = height;
-
-            const ctx = canvas.getContext("2d");
-
-            if (!ctx) {
-              URL.revokeObjectURL(objectUrl);
-              reject(new Error("Unable to process this image."));
-              return;
-            }
-
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, width, height);
-            ctx.drawImage(img, 0, 0, width, height);
-
-            result = canvas.toDataURL("image/jpeg", 0.5);
-
-            const estimatedBytes = Math.floor(
-              result.length * 0.75
-            );
-
-            if (estimatedBytes <= maxBytes) {
-              URL.revokeObjectURL(objectUrl);
-              resolve(result);
-              return;
-            }
-
-            const nextWidth = Math.max(
-              240,
-              Math.floor(width * 0.82)
-            );
-            const nextHeight = Math.max(
-              180,
-              Math.floor(height * 0.82)
-            );
-
-            if (
-              nextWidth === width &&
-              nextHeight === height
-            ) {
-              URL.revokeObjectURL(objectUrl);
-              reject(
-                new Error(
-                  "Unable to compress this image below 500 KB. Please choose another photo."
+            width =
+              Math.max(
+                1,
+                Math.round(
+                  width *
+                    initialScale
                 )
               );
-              return;
+
+            height =
+              Math.max(
+                1,
+                Math.round(
+                  height *
+                    initialScale
+                )
+              );
+
+            let result =
+              "";
+
+            let quality =
+              0.78;
+
+            /*
+              First stage:
+              reduce JPEG quality.
+            */
+            for (
+              let attempt = 0;
+              attempt < 30;
+              attempt += 1
+            ) {
+              const canvas =
+                document.createElement(
+                  "canvas"
+                );
+
+              canvas.width =
+                width;
+
+              canvas.height =
+                height;
+
+              const ctx =
+                canvas.getContext(
+                  "2d"
+                );
+
+              if (!ctx) {
+                URL.revokeObjectURL(
+                  objectUrl
+                );
+
+                reject(
+                  new Error(
+                    "Unable to process this image."
+                  )
+                );
+
+                return;
+              }
+
+              /*
+                White background ensures
+                transparent images render correctly.
+              */
+              ctx.fillStyle =
+                "#ffffff";
+
+              ctx.fillRect(
+                0,
+                0,
+                width,
+                height
+              );
+
+              ctx.drawImage(
+                img,
+                0,
+                0,
+                width,
+                height
+              );
+
+              result =
+                canvas.toDataURL(
+                  "image/jpeg",
+                  quality
+                );
+
+              /*
+                Base64 length is approximately
+                4/3 of the underlying binary size.
+              */
+              const estimatedBytes =
+                Math.floor(
+                  result.length *
+                    0.75
+                );
+
+              if (
+                estimatedBytes <=
+                maxBytes
+              ) {
+                URL.revokeObjectURL(
+                  objectUrl
+                );
+
+                resolve(
+                  result
+                );
+
+                return;
+              }
+
+              if (
+                quality >
+                0.38
+              ) {
+                quality -=
+                  0.06;
+
+                continue;
+              }
+
+              width =
+                Math.max(
+                  320,
+                  Math.round(
+                    width *
+                      0.82
+                  )
+                );
+
+              height =
+                Math.max(
+                  240,
+                  Math.round(
+                    height *
+                      0.82
+                  )
+                );
+
+              quality =
+                0.68;
             }
 
-            width = nextWidth;
-            height = nextHeight;
+            /*
+              Second stage:
+              continue reducing dimensions
+              until below 500 KB.
+            */
+            while (true) {
+              const canvas =
+                document.createElement(
+                  "canvas"
+                );
+
+              canvas.width =
+                width;
+
+              canvas.height =
+                height;
+
+              const ctx =
+                canvas.getContext(
+                  "2d"
+                );
+
+              if (!ctx) {
+                URL.revokeObjectURL(
+                  objectUrl
+                );
+
+                reject(
+                  new Error(
+                    "Unable to process this image."
+                  )
+                );
+
+                return;
+              }
+
+              ctx.fillStyle =
+                "#ffffff";
+
+              ctx.fillRect(
+                0,
+                0,
+                width,
+                height
+              );
+
+              ctx.drawImage(
+                img,
+                0,
+                0,
+                width,
+                height
+              );
+
+              result =
+                canvas.toDataURL(
+                  "image/jpeg",
+                  0.5
+                );
+
+              const estimatedBytes =
+                Math.floor(
+                  result.length *
+                    0.75
+                );
+
+              if (
+                estimatedBytes <=
+                maxBytes
+              ) {
+                URL.revokeObjectURL(
+                  objectUrl
+                );
+
+                resolve(
+                  result
+                );
+
+                return;
+              }
+
+              const nextWidth =
+                Math.max(
+                  240,
+                  Math.floor(
+                    width *
+                      0.82
+                  )
+                );
+
+              const nextHeight =
+                Math.max(
+                  180,
+                  Math.floor(
+                    height *
+                      0.82
+                  )
+                );
+
+              if (
+                nextWidth ===
+                  width &&
+                nextHeight ===
+                  height
+              ) {
+                URL.revokeObjectURL(
+                  objectUrl
+                );
+
+                reject(
+                  new Error(
+                    "Unable to compress this image below 500 KB. Please choose another photo."
+                  )
+                );
+
+                return;
+              }
+
+              width =
+                nextWidth;
+
+              height =
+                nextHeight;
+            }
+          } catch (
+            compressionError
+          ) {
+            URL.revokeObjectURL(
+              objectUrl
+            );
+
+            reject(
+              compressionError
+            );
           }
-        } catch (compressionError) {
-          URL.revokeObjectURL(objectUrl);
-          reject(compressionError);
-        }
-      };
+        };
 
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        reject(
-          new Error(
-            "Unable to read this image. Please try another photo."
-          )
-        );
-      };
+        img.onerror = () => {
+          URL.revokeObjectURL(
+            objectUrl
+          );
 
-      img.src = objectUrl;
-    });
+          reject(
+            new Error(
+              "Unable to read this image. Please try another photo."
+            )
+          );
+        };
+
+        img.src =
+          objectUrl;
+      }
+    );
   };
 
   /* =====================================================
-     SAFE LOCAL USER
-     Never store Base64 profile image in localStorage.
+     SAVE LIGHTWEIGHT USER LOCALLY
+
+     IMPORTANT:
+     - No Base64 image
+     - HTTP image URL is allowed
   ===================================================== */
 
-  const saveSafeUserLocally = (user) => {
+  const saveSafeUserLocally = (
+    user
+  ) => {
     if (!user) return;
 
+    const safeImage =
+      getSafeImageUrl(
+        user.profileImage ||
+          user.profile_image ||
+          ""
+      );
+
     const safeUser = {
-      id: user.id || null,
+      id:
+        user.id ||
+        null,
+
       name:
         user.name ||
         user.fullName ||
         user.username ||
         "",
-      email: user.email || "",
-      points: Number(user.points || 0),
-      created_at: user.created_at || null,
+
+      email:
+        user.email ||
+        "",
+
+      points:
+        Number(
+          user.points || 0
+        ),
+
+      created_at:
+        user.created_at ||
+        null,
+
       createdAt:
         user.createdAt ||
         user.created_at ||
         null,
-      reports: Number(user.reports || 0),
+
+      reports:
+        Number(
+          user.reports || 0
+        ),
+
+      /*
+        Only save a URL.
+        Base64 is explicitly rejected.
+      */
+      ...(safeImage
+        ? {
+            profileImage:
+              safeImage,
+            profile_image:
+              safeImage,
+          }
+        : {}),
     };
 
-    const cleanEmail = safeUser.email
-      .trim()
-      .toLowerCase();
+    const cleanEmail =
+      safeUser.email
+        .trim()
+        .toLowerCase();
+
+    /* -------------------------------------------------
+       CURRENT USER
+    ------------------------------------------------- */
 
     try {
       localStorage.setItem(
         "foundlyCurrentUser",
-        JSON.stringify(safeUser)
+        JSON.stringify(
+          safeUser
+        )
       );
     } catch (error) {
       console.warn(
@@ -433,23 +828,33 @@ function Profile({
       );
 
       try {
-        localStorage.removeItem("foundlyCurrentUser");
+        localStorage.removeItem(
+          "foundlyCurrentUser"
+        );
       } catch {
         // Ignore
       }
     }
 
+    /* -------------------------------------------------
+       POINTS
+    ------------------------------------------------- */
+
     try {
       if (cleanEmail) {
         localStorage.setItem(
           `foundlyPoints_${cleanEmail}`,
-          String(safeUser.points)
+          String(
+            safeUser.points
+          )
         );
       }
 
       localStorage.setItem(
         "foundlyPoints",
-        String(safeUser.points)
+        String(
+          safeUser.points
+        )
       );
     } catch (error) {
       console.warn(
@@ -458,53 +863,106 @@ function Profile({
       );
     }
 
+    /* -------------------------------------------------
+       USERS CACHE
+    ------------------------------------------------- */
+
     try {
       let users = [];
 
       try {
-        users = JSON.parse(
-          localStorage.getItem("foundlyUsers") || "[]"
-        );
+        users =
+          JSON.parse(
+            localStorage.getItem(
+              "foundlyUsers"
+            ) || "[]"
+          );
       } catch {
         users = [];
       }
 
-      if (!Array.isArray(users)) {
+      if (
+        !Array.isArray(
+          users
+        )
+      ) {
         users = [];
       }
 
-      const lightweightUsers = users
-        .filter(Boolean)
-        .map((item) => ({
-          id: item.id || null,
-          name:
-            item.name ||
-            item.fullName ||
-            item.username ||
-            "",
-          email: item.email || "",
-          points: Number(item.points || 0),
-          created_at: item.created_at || null,
-          createdAt:
-            item.createdAt ||
-            item.created_at ||
-            null,
-          reports: Number(item.reports || 0),
-        }))
-        .filter(
-          (item) =>
-            item.email
-              .trim()
-              .toLowerCase() !== cleanEmail
-        );
+      const lightweightUsers =
+        users
+          .filter(Boolean)
+          .map((item) => {
+            const itemImage =
+              getSafeImageUrl(
+                item.profileImage ||
+                  item.profile_image ||
+                  ""
+              );
+
+            return {
+              id:
+                item.id ||
+                null,
+
+              name:
+                item.name ||
+                item.fullName ||
+                item.username ||
+                "",
+
+              email:
+                item.email ||
+                "",
+
+              points:
+                Number(
+                  item.points || 0
+                ),
+
+              created_at:
+                item.created_at ||
+                null,
+
+              createdAt:
+                item.createdAt ||
+                item.created_at ||
+                null,
+
+              reports:
+                Number(
+                  item.reports || 0
+                ),
+
+              ...(itemImage
+                ? {
+                    profileImage:
+                      itemImage,
+                    profile_image:
+                      itemImage,
+                  }
+                : {}),
+            };
+          })
+          .filter(
+            (item) =>
+              item.email
+                .trim()
+                .toLowerCase() !==
+              cleanEmail
+          );
 
       if (cleanEmail) {
-        lightweightUsers.push(safeUser);
+        lightweightUsers.push(
+          safeUser
+        );
       }
 
       localStorage.setItem(
         "foundlyUsers",
-        JSON.stringify(lightweightUsers)
+        JSON.stringify(
+          lightweightUsers
+        )
       );
     } catch (error) {
       console.warn(
@@ -513,7 +971,9 @@ function Profile({
       );
 
       try {
-        localStorage.removeItem("foundlyUsers");
+        localStorage.removeItem(
+          "foundlyUsers"
+        );
       } catch {
         // Ignore
       }
@@ -521,13 +981,16 @@ function Profile({
   };
 
   /* =====================================================
-     CLEAN OLD OVERSIZED LOCAL CACHE
+     INITIAL LOCAL CLEANUP
+
+     Keeps old Base64 data out of localStorage.
   ===================================================== */
 
   useEffect(() => {
-    saveSafeUserLocally(currentUser);
+    saveSafeUserLocally(
+      currentUser
+    );
 
-    // Run once when Profile opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -535,187 +998,316 @@ function Profile({
      IMAGE UPLOAD
   ===================================================== */
 
-  const handleImageChange = async (event) => {
-    const file = event.target.files?.[0];
+  const handleImageChange =
+    async (event) => {
+      const file =
+        event.target.files?.[0];
 
-    if (!file) {
-      return;
-    }
+      if (!file) {
+        return;
+      }
 
-    if (!file.type.startsWith("image/")) {
-      alert("Please select an image file.");
-      return;
-    }
+      if (
+        !file.type.startsWith(
+          "image/"
+        )
+      ) {
+        alert(
+          "Please select an image file."
+        );
 
-    /*
-      Large phone/iPad photos are allowed.
-      They are compressed before upload.
-    */
-    if (file.size > 15 * 1024 * 1024) {
-      alert(
-        "Please choose an image smaller than 15MB."
-      );
-      return;
-    }
+        event.target.value =
+          "";
 
-    setSaved(false);
-
-    try {
-      const compressedImage =
-        await compressImage(file);
-
-      setProfileImage(compressedImage);
+        return;
+      }
 
       /*
-        Clear any old oversized profile image
-        from localStorage immediately.
+        Allow large phone photos temporarily.
+        They will be compressed before upload.
       */
-      saveSafeUserLocally({
-        ...(currentUser || {}),
-        points,
-        reports: totalReports,
-      });
-    } catch (error) {
-      console.error(
-        "Profile image compression error:",
-        error
-      );
+      if (
+        file.size >
+        15 * 1024 * 1024
+      ) {
+        alert(
+          "Please choose an image smaller than 15MB."
+        );
 
-      setProfileImage("");
+        event.target.value =
+          "";
 
-      alert(
-        error?.message ||
-          "Unable to process this image. Please try another photo."
-      );
-    } finally {
-      event.target.value = "";
-    }
-  };
+        return;
+      }
+
+      setSaved(false);
+
+      try {
+        const compressedImage =
+          await compressImage(
+            file
+          );
+
+        /*
+          Extra client-side safety.
+        */
+        const estimatedBytes =
+          Math.floor(
+            compressedImage.length *
+              0.75
+          );
+
+        if (
+          estimatedBytes >
+          500 * 1024
+        ) {
+          throw new Error(
+            "Unable to compress this image below 500 KB. Please choose another photo."
+          );
+        }
+
+        /*
+          Display compressed image immediately.
+        */
+        setProfileImage(
+          compressedImage
+        );
+      } catch (error) {
+        console.error(
+          "Profile image compression error:",
+          error
+        );
+
+        setProfileImage("");
+
+        alert(
+          error?.message ||
+            "Unable to process this image. Please try another photo."
+        );
+      } finally {
+        event.target.value =
+          "";
+      }
+    };
 
   /* =====================================================
      REMOVE IMAGE
   ===================================================== */
 
   const removeImage = () => {
-
     setProfileImage("");
 
     setSaved(false);
-
   };
 
   /* =====================================================
-     SAVE PROFILE TO SUPABASE
+     SAVE PROFILE
   ===================================================== */
 
-  const handleSaveProfile = async () => {
-    const trimmedName = name.trim();
+  const handleSaveProfile =
+    async () => {
+      const trimmedName =
+        name.trim();
 
-    if (!trimmedName) {
-      alert("Please enter your name.");
-      return;
-    }
-
-    if (!currentUser?.id) {
-      alert(
-        "Your login session has expired. Please login again."
-      );
-      return;
-    }
-
-    setSaving(true);
-    setSaved(false);
-
-    try {
-      const response = await fetch(
-        `${API_URL}/api/users/${currentUser.id}/profile`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: trimmedName,
-            profileImage: profileImage || "",
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-          "Unable to save your profile."
+      if (!trimmedName) {
+        alert(
+          "Please enter your name."
         );
+
+        return;
       }
 
-      const serverUser = data.user || {};
-
-      const savedProfileImage =
-        serverUser.profile_image ||
-        serverUser.profileImage ||
-        profileImage ||
-        "";
-
-      const displayProfileImage =
-        withCacheBust(
-          savedProfileImage
+      if (!currentUser?.id) {
+        alert(
+          "Your login session has expired. Please login again."
         );
 
-      const updatedCurrentUser = {
-        ...(currentUser || {}),
-        id: serverUser.id || currentUser.id,
-        name: serverUser.name || trimmedName,
-        email: serverUser.email || userEmail,
-        points: Number(
-          serverUser.points ?? points
-        ),
-        profileImage:
-          displayProfileImage,
-        profile_image:
-          displayProfileImage,
-        reports: totalReports,
-      };
+        return;
+      }
 
       /*
-        Store only lightweight user information locally.
-        The profile image is never written to localStorage.
+        If profileImage is Base64,
+        it is allowed here because it is
+        being sent to the backend.
+
+        It is NEVER stored directly in localStorage.
       */
-      saveSafeUserLocally(
-        updatedCurrentUser
-      );
+      const imageToSave =
+        profileImage || "";
 
-      setName(trimmedName);
-      setProfileImage(
-        updatedCurrentUser.profileImage
-      );
-      setPoints(
-        Number(updatedCurrentUser.points || 0)
-      );
-      setSaved(true);
+      setSaving(true);
+      setSaved(false);
 
-      window.dispatchEvent(
-        new Event("foundly-profile-updated")
-      );
+      try {
+        const response =
+          await fetch(
+            `${API_URL}/api/users/${currentUser.id}/profile`,
+            {
+              method:
+                "PATCH",
 
-      setTimeout(() => {
-        setSaved(false);
-      }, 3000);
-    } catch (error) {
-      console.error(
-        "Save profile error:",
-        error
-      );
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
 
-      alert(
-        error.message ||
-        "Unable to save your profile. Please try again."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+              body:
+                JSON.stringify({
+                  name:
+                    trimmedName,
+
+                  profileImage:
+                    imageToSave,
+                }),
+            }
+          );
+
+        let data = {};
+
+        try {
+          data =
+            await response.json();
+        } catch {
+          data = {};
+        }
+
+        if (
+          !response.ok
+        ) {
+          throw new Error(
+            data.message ||
+              "Unable to save your profile."
+          );
+        }
+
+        const serverUser =
+          data.user || {};
+
+        /*
+          Backend now returns the
+          lightweight profile image URL.
+        */
+        const savedProfileImage =
+          serverUser.profileImage ||
+          serverUser.profile_image ||
+          "";
+
+        const cleanImageUrl =
+          getSafeImageUrl(
+            savedProfileImage
+          );
+
+        const displayProfileImage =
+          cleanImageUrl
+            ? withCacheBust(
+                cleanImageUrl
+              )
+            : "";
+
+        const updatedCurrentUser =
+          {
+            ...(currentUser || {}),
+
+            id:
+              serverUser.id ||
+              currentUser.id,
+
+            name:
+              serverUser.name ||
+              trimmedName,
+
+            email:
+              serverUser.email ||
+              userEmail,
+
+            points:
+              Number(
+                serverUser.points ??
+                  points
+              ),
+
+            profileImage:
+              displayProfileImage,
+
+            profile_image:
+              displayProfileImage,
+
+            reports:
+              totalReports,
+          };
+
+        /*
+          Save only lightweight information.
+          Base64 is NOT saved here.
+        */
+        saveSafeUserLocally(
+          updatedCurrentUser
+        );
+
+        /*
+          IMPORTANT:
+          Tell App.jsx immediately that
+          the user data changed.
+
+          App.jsx already has
+          handleProfileUpdated().
+        */
+        if (
+          typeof onProfileUpdated ===
+          "function"
+        ) {
+          onProfileUpdated(
+            updatedCurrentUser
+          );
+        }
+
+        setName(
+          trimmedName
+        );
+
+        setProfileImage(
+          displayProfileImage
+        );
+
+        setPoints(
+          Number(
+            updatedCurrentUser.points ||
+              0
+          )
+        );
+
+        setSaved(true);
+
+        /*
+          Also notify other components/tabs.
+        */
+        window.dispatchEvent(
+          new CustomEvent(
+            "foundly-profile-updated",
+            {
+              detail:
+                updatedCurrentUser,
+            }
+          )
+        );
+
+        setTimeout(() => {
+          setSaved(false);
+        }, 3000);
+      } catch (error) {
+        console.error(
+          "Save profile error:",
+          error
+        );
+
+        alert(
+          error?.message ||
+            "Unable to save your profile. Please try again."
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
 
   /* =====================================================
      INITIAL
@@ -724,14 +1316,14 @@ function Profile({
   const initial =
     name
       ?.charAt(0)
-      ?.toUpperCase() || "F";
+      ?.toUpperCase() ||
+    "F";
 
   /* =====================================================
      RETURN
   ===================================================== */
 
   return (
-
     <div className="profile-page">
 
       {/* =================================================
@@ -739,6 +1331,7 @@ function Profile({
       ================================================= */}
 
       <div className="profile-glow profile-glow-one" />
+
       <div className="profile-glow profile-glow-two" />
 
       <div className="profile-floating profile-heart">
@@ -764,19 +1357,15 @@ function Profile({
           className="profile-back-button"
           onClick={onBack}
         >
-
           <ArrowLeft size={19} />
 
           Back to Dashboard
-
         </button>
 
         <div className="profile-header-title">
-
           <UserRound size={19} />
 
           MY PROFILE
-
         </div>
 
       </header>
@@ -824,19 +1413,15 @@ function Profile({
             <div className="profile-photo-wrapper">
 
               {profileImage ? (
-
                 <img
                   src={profileImage}
                   alt="Profile"
                   className="profile-photo"
                 />
-
               ) : (
-
                 <div className="profile-photo-default">
                   {initial}
                 </div>
-
               )}
 
               <label
@@ -844,16 +1429,16 @@ function Profile({
                 className="profile-camera-button"
                 title="Upload profile picture"
               >
-
                 <Camera size={18} />
-
               </label>
 
               <input
                 id="profile-photo-upload"
                 type="file"
                 accept="image/png,image/jpeg,image/jpg,image/webp"
-                onChange={handleImageChange}
+                onChange={
+                  handleImageChange
+                }
                 disabled={saving}
                 hidden
               />
@@ -874,16 +1459,16 @@ function Profile({
               </span>
 
               {profileImage && (
-
                 <button
                   type="button"
                   className="remove-photo-button"
-                  onClick={removeImage}
+                  onClick={
+                    removeImage
+                  }
                   disabled={saving}
                 >
                   Remove photo
                 </button>
-
               )}
 
             </div>
@@ -965,7 +1550,9 @@ function Profile({
 
                 <span className="verified-badge">
 
-                  <CheckCircle2 size={14} />
+                  <CheckCircle2
+                    size={14}
+                  />
 
                   Verified
 
@@ -991,7 +1578,9 @@ function Profile({
             <div className="profile-section-heading">
 
               <div className="profile-section-icon">
+
                 <Trophy size={20} />
+
               </div>
 
               <div>
@@ -1015,7 +1604,9 @@ function Profile({
               <div className="profile-stat pink-stat">
 
                 <div className="profile-stat-icon">
+
                   <Trophy size={22} />
+
                 </div>
 
                 <strong>
@@ -1033,7 +1624,9 @@ function Profile({
               <div className="profile-stat purple-stat">
 
                 <div className="profile-stat-icon">
+
                   <FileText size={22} />
+
                 </div>
 
                 <strong>
@@ -1051,7 +1644,9 @@ function Profile({
               <div className="profile-stat pink-stat">
 
                 <div className="profile-stat-icon">
+
                   <Search size={22} />
+
                 </div>
 
                 <strong>
@@ -1069,7 +1664,9 @@ function Profile({
               <div className="profile-stat purple-stat">
 
                 <div className="profile-stat-icon">
+
                   <Package size={22} />
+
                 </div>
 
                 <strong>
@@ -1158,13 +1755,17 @@ function Profile({
             <button
               type="button"
               className="profile-save-button"
-              onClick={handleSaveProfile}
+              onClick={
+                handleSaveProfile
+              }
               disabled={saving}
             >
 
               <Save size={18} />
 
-              {saving ? "Saving..." : "Save Profile"}
+              {saving
+                ? "Saving..."
+                : "Save Profile"}
 
               <Sparkles size={17} />
 
@@ -1197,7 +1798,6 @@ function Profile({
       </footer>
 
     </div>
-
   );
 }
 
