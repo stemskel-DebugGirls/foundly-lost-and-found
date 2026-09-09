@@ -2050,3 +2050,235 @@
     min-height: 42px !important;
   }
 }
+/* =========================================================
+   MOBILE MESSAGES - LIST FIRST, CHAT AFTER USER SELECTED
+   ========================================================= */
+
+.mobile-chat-back-icon {
+  display: none;
+}
+
+.desktop-chat-close-icon {
+  display: block;
+}
+
+@media (max-width: 800px) {
+
+  /* -----------------------------------------
+     BASE MOBILE CONTAINER
+     ----------------------------------------- */
+
+  .messages-container {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: hidden !important;
+  }
+
+
+  /* -----------------------------------------
+     FIRST SCREEN:
+     SHOW CONVERSATION LIST ONLY
+     ----------------------------------------- */
+
+  .messages-container.mobile-chat-list {
+    min-height: 560px !important;
+  }
+
+  .messages-container.mobile-chat-list
+  .chat-list-panel {
+    display: flex !important;
+    width: 100% !important;
+    height: 560px !important;
+    min-height: 560px !important;
+    max-height: 560px !important;
+
+    border-right: none !important;
+    border-bottom: none !important;
+  }
+
+  .messages-container.mobile-chat-list
+  .chat-panel {
+    display: none !important;
+  }
+
+  .messages-container.mobile-chat-list
+  .chat-list {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    height: auto !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+
+  /* -----------------------------------------
+     CHAT SCREEN:
+     HIDE LIST + SHOW SELECTED USER CHAT
+     ----------------------------------------- */
+
+  .messages-container.mobile-chat-open {
+    height: 650px !important;
+    min-height: 650px !important;
+    max-height: 650px !important;
+  }
+
+  .messages-container.mobile-chat-open
+  .chat-list-panel {
+    display: none !important;
+  }
+
+  .messages-container.mobile-chat-open
+  .chat-panel {
+    display: flex !important;
+    width: 100% !important;
+    height: 650px !important;
+    min-height: 650px !important;
+    max-height: 650px !important;
+
+    flex-direction: column !important;
+  }
+
+
+  /* -----------------------------------------
+     MOBILE BACK BUTTON
+     ----------------------------------------- */
+
+  .messages-container.mobile-chat-open
+  .mobile-chat-back-icon {
+    display: block !important;
+  }
+
+  .messages-container.mobile-chat-open
+  .desktop-chat-close-icon {
+    display: none !important;
+  }
+
+  .messages-container.mobile-chat-open
+  .close-chat-button {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 11px !important;
+    background: rgba(255, 45, 140, .09) !important;
+    border: 1px solid rgba(255, 45, 140, .22) !important;
+    color: #ff63aa !important;
+  }
+
+
+  /* -----------------------------------------
+     CHAT HEADER
+     ----------------------------------------- */
+
+  .messages-container.mobile-chat-open
+  .chat-panel-header {
+    min-height: 64px !important;
+    flex-shrink: 0 !important;
+    padding: 0 12px !important;
+  }
+
+
+  /* -----------------------------------------
+     REPORT INFO
+     ----------------------------------------- */
+
+  .messages-container.mobile-chat-open
+  .chat-report-info {
+    flex-shrink: 0 !important;
+    margin: 10px 11px !important;
+    padding: 9px 11px !important;
+  }
+
+
+  /* -----------------------------------------
+     MESSAGE AREA
+     ----------------------------------------- */
+
+  .messages-container.mobile-chat-open
+  .chat-messages {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    padding: 12px !important;
+  }
+
+
+  /* -----------------------------------------
+     INPUT ALWAYS AT BOTTOM
+     ----------------------------------------- */
+
+  .messages-container.mobile-chat-open
+  .chat-input-area {
+    flex-shrink: 0 !important;
+  }
+}
+
+
+/* =========================================================
+   SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 430px) {
+
+  .messages-container.mobile-chat-list {
+    min-height: 520px !important;
+  }
+
+  .messages-container.mobile-chat-list
+  .chat-list-panel {
+    height: 520px !important;
+    min-height: 520px !important;
+    max-height: 520px !important;
+  }
+
+  .messages-container.mobile-chat-open {
+    height: 620px !important;
+    min-height: 620px !important;
+    max-height: 620px !important;
+  }
+
+  .messages-container.mobile-chat-open
+  .chat-panel {
+    height: 620px !important;
+    min-height: 620px !important;
+    max-height: 620px !important;
+  }
+}
+
+
+/* =========================================================
+   VERY SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 360px) {
+
+  .messages-container.mobile-chat-list {
+    min-height: 490px !important;
+  }
+
+  .messages-container.mobile-chat-list
+  .chat-list-panel {
+    height: 490px !important;
+    min-height: 490px !important;
+    max-height: 490px !important;
+  }
+
+  .messages-container.mobile-chat-open {
+    height: 590px !important;
+    min-height: 590px !important;
+    max-height: 590px !important;
+  }
+
+  .messages-container.mobile-chat-open
+  .chat-panel {
+    height: 590px !important;
+    min-height: 590px !important;
+    max-height: 590px !important;
+  }
+}

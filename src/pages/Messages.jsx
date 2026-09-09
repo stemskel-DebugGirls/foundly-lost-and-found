@@ -224,11 +224,6 @@ function Messages({
         currentUser?.id ||
         "";
 
-      /*
-        If current user id isn't available,
-        find it again from users.
-      */
-
       if (!resolvedUserId) {
         try {
           const response = await fetch(
@@ -317,13 +312,6 @@ function Messages({
         chat.otherUser &&
         chat.otherUser.email
       ) {
-        /*
-          IMPORTANT:
-          We ignore reportId for the chat identity.
-
-          The chat belongs to ONE PERSON only.
-        */
-
         const otherUserEmail =
           chat.otherUser.email
             ?.trim()
@@ -433,10 +421,6 @@ function Messages({
 
   /* =====================================================
      BUILD ONE CHAT PER PERSON
-     
-     VERY IMPORTANT:
-     Different reports between the same users
-     are grouped into ONE conversation.
   ===================================================== */
 
   const chatList = useMemo(() => {
@@ -468,10 +452,6 @@ function Messages({
       let otherEmail = "";
       let otherName = "";
 
-      /*
-        CURRENT USER IS REPORTER
-      */
-
       if (reporterEmail === userEmail) {
         if (
           claimantEmail &&
@@ -482,10 +462,6 @@ function Messages({
         }
       }
 
-      /*
-        CURRENT USER IS CLAIMANT
-      */
-
       else if (
         claimantEmail === userEmail &&
         reporterEmail &&
@@ -494,11 +470,6 @@ function Messages({
         otherEmail = reporterEmail;
         otherName = reporterName;
       }
-
-      /*
-        CURRENT USER IS NEITHER
-        BUT CAN MESSAGE REPORTER
-      */
 
       else if (
         reporterEmail &&
@@ -520,14 +491,6 @@ function Messages({
 
       const existing =
         grouped.get(otherEmail);
-
-      /*
-        Keep one chat only.
-
-        But remember the latest report
-        so we can display the most relevant
-        Lost & Found item.
-      */
 
       if (!existing) {
         grouped.set(otherEmail, {
@@ -566,11 +529,6 @@ function Messages({
           },
         });
       } else {
-        /*
-          If this report is newer,
-          use it as the displayed item.
-        */
-
         const oldDate = new Date(
           existing.latestReportDate || 0
         );
@@ -600,13 +558,7 @@ function Messages({
     });
 
     /* =================================================
-       B. IMPORTANT:
-          CREATE ONE CHAT FROM MESSAGES
-
-       This catches:
-       - direct messages
-       - Lost & Found messages
-       - reports without claimant
+       B. CREATE ONE CHAT FROM MESSAGES
     ================================================= */
 
     messages.forEach((message) => {
@@ -703,10 +655,6 @@ function Messages({
       }
     });
 
-    /*
-      Convert Map to array
-    */
-
     return Array.from(
       grouped.values()
     ).sort(
@@ -754,12 +702,6 @@ function Messages({
 
   /* =====================================================
      SELECTED CHAT MESSAGES
-
-     IMPORTANT:
-     DO NOT FILTER BY REPORT ID.
-
-     All messages between the same two users
-     belong to ONE chat.
   ===================================================== */
 
   const selectedMessages = selectedChat
@@ -779,13 +721,12 @@ function Messages({
             ?.trim()
             .toLowerCase() || "";
 
-        const sameUsers =
+        return (
           (senderEmail === userEmail &&
             receiverEmail === otherEmail) ||
           (senderEmail === otherEmail &&
-            receiverEmail === userEmail);
-
-        return sameUsers;
+            receiverEmail === userEmail)
+        );
       })
     : [];
 
@@ -826,8 +767,7 @@ function Messages({
 
           return (
             (senderEmail === userEmail &&
-              receiverEmail ===
-                otherEmail) ||
+              receiverEmail === otherEmail) ||
             (senderEmail === otherEmail &&
               receiverEmail === userEmail)
           );
@@ -852,12 +792,6 @@ function Messages({
 
     setSelectedChat({
       ...chat,
-
-      /*
-        One profile = one chat,
-        therefore reportId is ALWAYS null
-        for chat identity.
-      */
 
       reportId: null,
 
@@ -927,16 +861,6 @@ function Messages({
       setSending(true);
       setErrorMessage("");
 
-      /*
-        IMPORTANT:
-        When replying inside a chat that
-        came from a report, we should attach
-        the message to the most relevant report
-        if possible.
-
-        However, chat identity remains user-based.
-      */
-
       let reportId = null;
 
       const receiverEmail =
@@ -959,8 +883,7 @@ function Messages({
 
             return (
               (reporter === userEmail &&
-                claimant ===
-                  receiverEmail) ||
+                claimant === receiverEmail) ||
               (reporter === receiverEmail &&
                 claimant === userEmail) ||
               reporter === receiverEmail
@@ -1228,8 +1151,16 @@ function Messages({
 
         {/* CONTAINER */}
 
-        <section className="messages-container">
-          {/* CHAT LIST */}
+        <section
+          className={`messages-container ${
+            selectedChat
+              ? "mobile-chat-open"
+              : "mobile-chat-list"
+          }`}
+        >
+          {/* =================================================
+              CHAT LIST PANEL
+          ================================================= */}
 
           <aside className="chat-list-panel">
             <div className="chat-list-heading">
@@ -1346,8 +1277,6 @@ function Messages({
                           )
                         }
                       >
-                        {/* AVATAR */}
-
                         <div className="chat-avatar">
                           {displayImage ? (
                             <img
@@ -1363,8 +1292,6 @@ function Messages({
                           )}
                         </div>
 
-                        {/* USER */}
-
                         <div className="chat-item-content">
                           <strong>
                             {chat
@@ -1379,8 +1306,6 @@ function Messages({
                               "Start a conversation"}
                           </span>
                         </div>
-
-                        {/* RIGHT */}
 
                         <div className="chat-item-right">
                           {latest && (
@@ -1405,7 +1330,9 @@ function Messages({
             </div>
           </aside>
 
-          {/* CHAT PANEL */}
+          {/* =================================================
+              CHAT PANEL
+          ================================================= */}
 
           <section className="chat-panel">
             {!selectedChat ? (
@@ -1472,14 +1399,23 @@ function Messages({
                     </div>
                   </div>
 
+                  {/* DESKTOP = X / MOBILE = BACK */}
+
                   <button
                     type="button"
                     className="close-chat-button"
-                    onClick={
-                      closeChat
-                    }
+                    onClick={closeChat}
+                    aria-label="Back to Conversations"
                   >
-                    <X size={18} />
+                    <ArrowLeft
+                      size={20}
+                      className="mobile-chat-back-icon"
+                    />
+
+                    <X
+                      size={18}
+                      className="desktop-chat-close-icon"
+                    />
                   </button>
                 </div>
 
