@@ -17,6 +17,14 @@ import {
 import "./Profile.css";
 import API_URL from "../api";
 
+function withCacheBust(url) {
+  if (!url) return "";
+  if (typeof url !== "string") return url;
+
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}v=${Date.now()}`;
+}
+
 function Profile({
   currentUser,
   onBack,
@@ -98,10 +106,15 @@ function Profile({
               currentUser?.name ||
               ""
             );
-            setProfileImage(
+            const serverProfileImage =
               serverUser.profileImage ||
               serverUser.profile_image ||
-              ""
+              "";
+
+            setProfileImage(
+              withCacheBust(
+                serverProfileImage
+              )
             );
             setPoints(
               Number(serverUser.points || 0)
@@ -639,6 +652,17 @@ function Profile({
 
       const serverUser = data.user || {};
 
+      const savedProfileImage =
+        serverUser.profile_image ||
+        serverUser.profileImage ||
+        profileImage ||
+        "";
+
+      const displayProfileImage =
+        withCacheBust(
+          savedProfileImage
+        );
+
       const updatedCurrentUser = {
         ...(currentUser || {}),
         id: serverUser.id || currentUser.id,
@@ -648,15 +672,9 @@ function Profile({
           serverUser.points ?? points
         ),
         profileImage:
-          serverUser.profile_image ||
-          serverUser.profileImage ||
-          profileImage ||
-          "",
+          displayProfileImage,
         profile_image:
-          serverUser.profile_image ||
-          serverUser.profileImage ||
-          profileImage ||
-          "",
+          displayProfileImage,
         reports: totalReports,
       };
 
