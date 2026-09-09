@@ -2349,13 +2349,11 @@ useEffect(() => {
           </strong>
 
           <span>
-            Password reset and email verification
-            will be connected when Foundly moves
-            to online authentication.
+            Your Foundly account is protected with your registered email and password.
           </span>
 
           <div className="settings-security-note">
-            Email verification planned
+            Account Protected
           </div>
 
         </div>
