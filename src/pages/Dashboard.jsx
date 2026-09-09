@@ -174,6 +174,17 @@ function Dashboard({
 
 
   /* =====================================================
+     ALL REPORTS VIEW
+  ===================================================== */
+
+  const [showAllReports, setShowAllReports] =
+    useState(false);
+
+  const [allReportsTab, setAllReportsTab] =
+    useState("active");
+
+
+  /* =====================================================
      NOTIFICATION
   ===================================================== */
 
@@ -2906,7 +2917,42 @@ useEffect(() => {
             </div>
 
 
-            <div className="recent-search">
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              flexWrap: "wrap",
+              justifyContent: "flex-end"
+            }}>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAllReportsTab("active");
+                  setShowAllReports(true);
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "5px",
+                  padding: "8px 11px",
+                  border: "1px solid rgba(255, 77, 155, 0.35)",
+                  borderRadius: "999px",
+                  background: "rgba(255, 77, 155, 0.08)",
+                  color: "#ff70b1",
+                  fontFamily: "inherit",
+                  fontSize: "9px",
+                  fontWeight: 900,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap"
+                }}
+              >
+                View All Reports
+                <ArrowRight size={13} />
+              </button>
+
+              <div className="recent-search">
 
 
               <Search size={16} />
@@ -2922,6 +2968,9 @@ useEffect(() => {
                   )
                 }
               />
+
+
+              </div>
 
 
             </div>
@@ -3543,6 +3592,416 @@ useEffect(() => {
 
 
       </main>
+
+
+      {/* =====================================================
+          ALL REPORTS MODAL
+      ===================================================== */}
+
+      {showAllReports && (
+
+        <div
+          onClick={() => setShowAllReports(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9998,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "12px",
+            background: "rgba(7, 5, 9, 0.86)",
+            backdropFilter: "blur(8px)"
+          }}
+        >
+
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "1050px",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              background: "linear-gradient(145deg, #170d18, #0e0910)",
+              border: "1px solid rgba(255, 76, 158, 0.35)",
+              borderRadius: "20px",
+              boxShadow: "0 25px 80px rgba(0,0,0,0.65)"
+            }}
+          >
+
+            <div style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "14px",
+              padding: "18px 20px 14px",
+              borderBottom: "1px solid rgba(255,255,255,0.06)"
+            }}>
+
+              <div style={{ minWidth: 0 }}>
+                <span style={{
+                  color: "#ff67aa",
+                  fontSize: "9px",
+                  fontWeight: 900,
+                  letterSpacing: "0.14em"
+                }}>
+                  ✦ FOUNDLY COMMUNITY
+                </span>
+
+                <h2 style={{
+                  margin: "5px 0 3px",
+                  color: "#fff",
+                  fontSize: "clamp(22px, 4vw, 30px)"
+                }}>
+                  All Reports
+                </h2>
+
+                <p style={{
+                  margin: 0,
+                  color: "#aa96a6",
+                  fontSize: "10px"
+                }}>
+                  Browse all lost and found reports.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAllReports(false)}
+                aria-label="Close all reports"
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "1px solid #5a3150",
+                  borderRadius: "10px",
+                  background: "#211322",
+                  color: "#ff80ba",
+                  cursor: "pointer"
+                }}
+              >
+                <X size={18} />
+              </button>
+
+            </div>
+
+
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              margin: "14px 20px 10px",
+              padding: "10px 12px",
+              border: "1px solid rgba(255, 78, 159, 0.32)",
+              borderRadius: "11px",
+              background: "rgba(255, 78, 159, 0.05)",
+              color: "#ff72b0"
+            }}>
+
+              <Search size={16} />
+
+              <input
+                type="text"
+                placeholder="Search reports..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                style={{
+                  width: "100%",
+                  minWidth: 0,
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  color: "#fff",
+                  fontFamily: "inherit",
+                  fontSize: "11px"
+                }}
+              />
+
+            </div>
+
+
+            <div style={{
+              display: "flex",
+              gap: "8px",
+              padding: "0 20px 12px",
+              flexWrap: "wrap"
+            }}>
+
+              <button
+                type="button"
+                onClick={() => setAllReportsTab("active")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "7px",
+                  padding: "8px 13px",
+                  border: allReportsTab === "active"
+                    ? "1px solid #ff4d9b"
+                    : "1px solid #43273c",
+                  borderRadius: "999px",
+                  background: allReportsTab === "active"
+                    ? "rgba(255,77,155,0.12)"
+                    : "#1c101b",
+                  color: allReportsTab === "active"
+                    ? "#ff72b0"
+                    : "#a992a4",
+                  fontFamily: "inherit",
+                  fontSize: "9px",
+                  fontWeight: 900,
+                  cursor: "pointer"
+                }}
+              >
+                Active
+                <span style={{
+                  minWidth: "19px",
+                  padding: "2px 5px",
+                  borderRadius: "999px",
+                  background: "#32182d",
+                  color: "#ff70b1",
+                  textAlign: "center"
+                }}>
+                  {filteredActiveReports.length}
+                </span>
+              </button>
+
+
+              <button
+                type="button"
+                onClick={() => setAllReportsTab("completed")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "7px",
+                  padding: "8px 13px",
+                  border: allReportsTab === "completed"
+                    ? "1px solid #b978ff"
+                    : "1px solid #43273c",
+                  borderRadius: "999px",
+                  background: allReportsTab === "completed"
+                    ? "rgba(185,120,255,0.11)"
+                    : "#1c101b",
+                  color: allReportsTab === "completed"
+                    ? "#c38aff"
+                    : "#a992a4",
+                  fontFamily: "inherit",
+                  fontSize: "9px",
+                  fontWeight: 900,
+                  cursor: "pointer"
+                }}
+              >
+                Completed
+                <span style={{
+                  minWidth: "19px",
+                  padding: "2px 5px",
+                  borderRadius: "999px",
+                  background: "#32182d",
+                  color: "#c38aff",
+                  textAlign: "center"
+                }}>
+                  {filteredResolvedReports.length}
+                </span>
+              </button>
+
+            </div>
+
+
+            <div style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: "auto",
+              padding: "0 20px 20px"
+            }}>
+
+              {(() => {
+                const list = (allReportsTab === "active"
+                  ? filteredActiveReports
+                  : filteredResolvedReports
+                ).slice().sort((a, b) => {
+                  const dateA = new Date(
+                    a.createdAt || a.created_at || 0
+                  ).getTime();
+                  const dateB = new Date(
+                    b.createdAt || b.created_at || 0
+                  ).getTime();
+                  return dateB - dateA;
+                });
+
+                if (list.length === 0) {
+                  return (
+                    <div style={{
+                      minHeight: "220px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#a892a3",
+                      textAlign: "center",
+                      gap: "7px"
+                    }}>
+                      <div style={{ fontSize: "30px" }}>
+                        {allReportsTab === "active" ? "✨" : "💗"}
+                      </div>
+                      <strong style={{ color: "#fff", fontSize: "12px" }}>
+                        {allReportsTab === "active"
+                          ? "No active reports found."
+                          : "No completed reports found."}
+                      </strong>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                    gap: "10px"
+                  }}>
+                    {list.map((report, index) => {
+                      const resolved =
+                        report.status === "resolved" ||
+                        report.status === "Resolved";
+
+                      return (
+                        <button
+                          type="button"
+                          key={report.id || index}
+                          onClick={() => {
+                            setShowAllReports(false);
+                            openReport(report);
+                          }}
+                          style={{
+                            width: "100%",
+                            minWidth: 0,
+                            display: "grid",
+                            gridTemplateColumns: "64px minmax(0, 1fr) auto",
+                            alignItems: "center",
+                            gap: "10px",
+                            padding: "9px",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            borderRadius: "13px",
+                            background: "rgba(255,255,255,0.025)",
+                            color: "#fff",
+                            textAlign: "left",
+                            cursor: "pointer",
+                            fontFamily: "inherit"
+                          }}
+                        >
+
+                          <div style={{
+                            position: "relative",
+                            width: "64px",
+                            height: "64px",
+                            overflow: "hidden",
+                            borderRadius: "9px",
+                            background: "#261627"
+                          }}>
+                            {report.image ? (
+                              <img
+                                src={report.image}
+                                alt={report.itemName || "Reported item"}
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover"
+                                }}
+                              />
+                            ) : (
+                              <div style={{
+                                width: "100%",
+                                height: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "25px"
+                              }}>
+                                {report.type === "found" ? "📦" : "🔎"}
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{
+                            minWidth: 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "4px"
+                          }}>
+                            <strong style={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              fontSize: "12px"
+                            }}>
+                              {report.itemName || "Unnamed Item"}
+                            </strong>
+
+                            <span style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              color: "#aa96a6",
+                              fontSize: "8px"
+                            }}>
+                              <MapPin size={11} />
+                              {report.location || "SK Limbang"}
+                            </span>
+
+                            <span style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              color: "#aa96a6",
+                              fontSize: "8px"
+                            }}>
+                              <Clock size={11} />
+                              {report.date
+                                ? `${report.date}${report.time ? ` · ${report.time}` : ""}`
+                                : "Recently"}
+                            </span>
+                          </div>
+
+                          <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            whiteSpace: "nowrap",
+                            color: resolved ? "#71dca1" : "#ff71b1",
+                            fontSize: "8px",
+                            fontWeight: 900
+                          }}>
+                            {resolved ? <CheckCircle2 size={12} /> : <span style={{
+                              width: "6px",
+                              height: "6px",
+                              borderRadius: "50%",
+                              background: "#ff4d9d"
+                            }} />}
+                            {resolved ? "Resolved" : "Active"}
+                          </div>
+
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
 
 
       {/* =====================================================
