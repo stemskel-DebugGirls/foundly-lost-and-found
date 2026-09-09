@@ -3119,6 +3119,7 @@ app.post(
     }
   }
 );
+
 /* =========================================================
    SYNC NOTIFICATIONS
 ========================================================= */
@@ -3131,15 +3132,24 @@ async function syncNotifications() {
       messagesResult,
       usersResult,
     ] = await Promise.all([
+      /* -----------------------------------------------------
+         REPORTS
+         IMPORTANT:
+         Include user_id, type and resolved_at so student
+         notifications can be created correctly.
+      ----------------------------------------------------- */
       supabase
         .from("reports")
         .select(
-          "id, item_name, status, reported_by, reporter_name, created_at"
+          "id, user_id, type, item_name, status, reported_by, reporter_name, resolved_at, created_at"
         )
         .order("created_at", {
           ascending: false,
         }),
 
+      /* -----------------------------------------------------
+         FEEDBACK
+      ----------------------------------------------------- */
       supabase
         .from("feedback")
         .select("*")
@@ -3147,6 +3157,9 @@ async function syncNotifications() {
           ascending: false,
         }),
 
+      /* -----------------------------------------------------
+         MESSAGES
+      ----------------------------------------------------- */
       supabase
         .from("messages")
         .select("*")
@@ -3154,6 +3167,9 @@ async function syncNotifications() {
           ascending: false,
         }),
 
+      /* -----------------------------------------------------
+         USERS
+      ----------------------------------------------------- */
       supabase
         .from("users")
         .select(
@@ -3183,6 +3199,10 @@ async function syncNotifications() {
     ===================================================== */
 
     reports.forEach((report) => {
+      /* ---------------------------------------------------
+         ADMIN - NEW REPORT
+      --------------------------------------------------- */
+
       notifications.push({
         notification_key:
           `admin-report-${report.id}`,
@@ -3200,7 +3220,13 @@ async function syncNotifications() {
           "New Report",
 
         description:
-          `${report.reporter_name || "A user"} submitted a ${report.type || "item"} report.`,
+          `${
+            report.reporter_name ||
+            "A user"
+          } submitted a ${
+            report.type ||
+            "item"
+          } report.`,
 
         source_id:
           report.id,
@@ -3214,10 +3240,98 @@ async function syncNotifications() {
         created_at:
           report.created_at,
       });
+
+      /* ---------------------------------------------------
+         STUDENT - REPORT SUBMITTED
+      --------------------------------------------------- */
+
+      if (report.user_id) {
+        notifications.push({
+          notification_key:
+            `student-report-${report.id}`,
+
+          recipient_role:
+            "student",
+
+          recipient_id:
+            report.user_id,
+
+          type:
+            "report",
+
+          title:
+            report.type === "found"
+              ? "Found Report Submitted"
+              : "Lost Report Submitted",
+
+          description:
+            `${
+              report.item_name ||
+              "Your item"
+            } was successfully reported. +10 points 💗`,
+
+          source_id:
+            report.id,
+
+          section:
+            "reports",
+
+          read:
+            false,
+
+          created_at:
+            report.created_at,
+        });
+
+        /* -----------------------------------------------
+           STUDENT - REPORT RESOLVED
+        ----------------------------------------------- */
+
+        if (
+          report.status === "resolved" ||
+          report.status === "Resolved"
+        ) {
+          notifications.push({
+            notification_key:
+              `student-resolved-${report.id}`,
+
+            recipient_role:
+              "student",
+
+            recipient_id:
+              report.user_id,
+
+            type:
+              "resolved",
+
+            title:
+              "Item Reunited",
+
+            description:
+              `${
+                report.item_name ||
+                "Your item"
+              } has been successfully claimed. 💗`,
+
+            source_id:
+              report.id,
+
+            section:
+              "reports",
+
+            read:
+              false,
+
+            created_at:
+              report.resolved_at ||
+              report.created_at,
+          });
+        }
+      }
     });
 
     /* =====================================================
-       NEW USER NOTIFICATIONS
+       NEW USER NOTIFICATIONS - ADMIN
     ===================================================== */
 
     users.forEach((user) => {
@@ -3238,7 +3352,10 @@ async function syncNotifications() {
           "New User",
 
         description:
-          `${user.name || "A new user"} joined Foundly.`,
+          `${
+            user.name ||
+            "A new user"
+          } joined Foundly.`,
 
         source_id:
           user.id,
@@ -3255,7 +3372,7 @@ async function syncNotifications() {
     });
 
     /* =====================================================
-       FEEDBACK NOTIFICATIONS
+       FEEDBACK NOTIFICATIONS - ADMIN
     ===================================================== */
 
     feedback.forEach((item) => {
@@ -3276,7 +3393,10 @@ async function syncNotifications() {
           "New Feedback",
 
         description:
-          `${item.rating || 0}/5 rating submitted.`,
+          `${
+            item.rating ||
+            0
+          }/5 rating submitted.`,
 
         source_id:
           item.id,
@@ -3297,6 +3417,10 @@ async function syncNotifications() {
     ===================================================== */
 
     messages.forEach((item) => {
+      /* ---------------------------------------------------
+         ADMIN - NEW MESSAGE
+      --------------------------------------------------- */
+
       notifications.push({
         notification_key:
           `admin-message-${item.id}`,
@@ -3314,7 +3438,10 @@ async function syncNotifications() {
           "New Message",
 
         description:
-          `${item.sender_name || "A user"} sent a message.`,
+          `${
+            item.sender_name ||
+            "A user"
+          } sent a message.`,
 
         source_id:
           item.id,
@@ -3328,6 +3455,10 @@ async function syncNotifications() {
         created_at:
           item.created_at,
       });
+
+      /* ---------------------------------------------------
+         STUDENT - NEW MESSAGE
+      --------------------------------------------------- */
 
       if (item.receiver_id) {
         notifications.push({
@@ -3347,7 +3478,10 @@ async function syncNotifications() {
             "New Message",
 
           description:
-            `${item.sender_name || "A Foundly Member"} sent you a message.`,
+            `${
+              item.sender_name ||
+              "A Foundly Member"
+            } sent you a message.`,
 
           source_id:
             item.id,
@@ -3364,11 +3498,20 @@ async function syncNotifications() {
       }
     });
 
+    /* =====================================================
+       NO NOTIFICATIONS
+    ===================================================== */
+
     if (
       notifications.length === 0
     ) {
       return;
     }
+
+    /* =====================================================
+       SAVE NOTIFICATIONS
+       Duplicate notification_key will be ignored.
+    ===================================================== */
 
     const {
       error,
@@ -3392,7 +3535,6 @@ async function syncNotifications() {
         error
       );
     }
-
   } catch (error) {
     console.error(
       "❌ Notification sync failed:",
@@ -3400,7 +3542,6 @@ async function syncNotifications() {
     );
   }
 }
-
 
 /* =========================================================
    GET NOTIFICATIONS
