@@ -3321,7 +3321,7 @@ function AdminDashboard({
 
                 <h2>
 
-                  {users.length}
+                  {schoolUsers.length}
                   {" "}
                   registered users
 
